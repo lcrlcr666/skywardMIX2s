@@ -1061,6 +1061,22 @@ fn wait(fds: &[i32], timeout_ms: i32) -> Result<()> {
     Ok(())
 }
 
+/// Say why the screen did not come up, with what the display says of itself,
+/// so that a boot which stops here leaves something to read afterwards.
+fn screen_failed(e: &anyhow::Error) {
+    let _ = skyward_sys::kmsg(&format!("the screen did not come up: {e:#}"));
+    match skyward_ui::surface::kms::report("/dev/dri/card0") {
+        Ok(text) => {
+            for line in text.lines().take(80) {
+                let _ = skyward_sys::kmsg(&format!("kms: {line}"));
+            }
+        }
+        Err(e) => {
+            let _ = skyward_sys::kmsg(&format!("kms not read: {e:#}"));
+        }
+    }
+}
+
 /// Run the pages. What `request`, read from misc, asks for decides the
 /// first of them; asking for nothing, they start at `start`.
 pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, start: Screen, dump: Option<&Path>) -> Result<()> {
@@ -1068,11 +1084,14 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
         return Err(anyhow!("{}: [display] density is required to lay out the UI", cfg.device.codename));
     }
     let mut info = skyward_info::collect(cfg)?;
-    let fonts = Fonts::load(font, 0, mono)?;
-    let mut surface = KmsSurface::open("/dev/dri/card0")?;
+    let fonts = Fonts::load(font, 0, mono).inspect_err(screen_failed)?;
+    let mut surface = KmsSurface::open("/dev/dri/card0").inspect_err(screen_failed)?;
     let (w, h) = surface.size();
     eprintln!("display {}", surface.describe());
-    let mut inputs = Inputs::open(w, h, cfg.touch.writes.clone())?;
+    let mut inputs = Inputs::open(w, h, cfg.touch.writes.clone()).inspect_err(|e| {
+        let _ = skyward_sys::kmsg(&format!("no input: {e:#}"));
+        let _ = skyward_sys::kmsg(&format!("input devices: {:?}", std::fs::read_dir("/dev/input").map(|d| d.filter_map(|e| e.ok().map(|e| e.file_name())).collect::<Vec<_>>())));
+    })?;
     let started = Instant::now();
     let mut touch_known = false;
     // adbd and fastbootd ask over it to go over to fastboot and back.

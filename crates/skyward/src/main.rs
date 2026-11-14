@@ -228,6 +228,19 @@ fn link_by_name() {
     }
 }
 
+/// Where the lines the recovery writes are kept: on the cache partition, which
+/// outlives the restart, so a boot that stops before the screen comes up can
+/// still be read afterwards; in the ramdisk where that cannot be mounted.
+fn log_where_it_survives() -> std::path::PathBuf {
+    #[cfg(target_os = "android")]
+    {
+        if let Ok(at) = skyward_block::fstab::mount("cache") {
+            return at.join("skyward-recovery.log");
+        }
+    }
+    std::path::PathBuf::from(skyward_sys::LOG)
+}
+
 fn main() -> Result<()> {
     #[cfg(target_os = "android")]
     link_by_name();
@@ -705,18 +718,30 @@ fn recovery() -> Result<()> {
         std::fs::create_dir_all(skyward_sys::RUN).with_context(|| format!("make {}", skyward_sys::RUN))?;
         std::fs::set_permissions(skyward_sys::RUN, std::fs::Permissions::from_mode(0o755))
             .with_context(|| format!("open {} to the recovery's other users", skyward_sys::RUN))?;
-        skyward_sys::keep_log(Path::new(skyward_sys::LOG))?;
+        skyward_sys::keep_log(&log_where_it_survives())?;
         // A recovery that ended with a function of its own in the port took
         // the port with it; going through "none" takes that function off.
         if skyward_sys::prop("sys.usb.state").is_some_and(|s| s != "adb") {
-            skyward_sys::usb::set("none", std::time::Duration::from_secs(5))?;
+            if let Err(e) = skyward_sys::usb::set("none", std::time::Duration::from_secs(5)) {
+                skyward_sys::kmsg(&format!("the port did not go to none: {e:#}"))?;
+            }
         }
-        skyward_sys::set_prop("sys.usb.config", "adb")?;
+        if let Err(e) = skyward_sys::set_prop("sys.usb.config", "adb") {
+            skyward_sys::kmsg(&format!("the port was not asked for adb: {e:#}"))?;
+        }
         let misc = bcb::misc();
-        let message = bcb::read(&misc)?;
+        // A recovery still comes up when misc cannot be read: say why, and
+        // start as one a restart brought up, with nothing asked of it.
+        let message = match bcb::read(&misc) {
+            Ok(message) => message,
+            Err(e) => {
+                skyward_sys::kmsg(&format!("{} not read: {e:#}", misc.display()))?;
+                bcb::Bcb::default()
+            }
+        };
         let request = message.request();
         if !request.work.lasts() {
-            bcb::clear(&misc)?;
+            let _ = bcb::clear(&misc);
         }
         let cfg = DeviceConfig::load(Path::new("/").join(ramdisk::CONFIG))?;
         skyward_sys::kmsg(&format!(
@@ -781,9 +806,18 @@ fn recovery() -> Result<()> {
             anyhow::bail!("the recovery service runs only on Android")
         }
     };
-    run().inspect_err(|e| {
-        let _ = skyward_sys::kmsg(&format!("recovery failed: {e:#}"));
-    })
+    match run() {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            // Say why, and stay here instead of leaving: init starts the
+            // service again at once, and a recovery that stops before the
+            // screen comes up would leave neither the reason nor the log
+            // anywhere to be read.
+            let _ = skyward_sys::kmsg(&format!("recovery failed: {e:#}"));
+            std::thread::sleep(std::time::Duration::from_secs(60 * 60));
+            Ok(())
+        }
+    }
 }
 
 /// Map and mount the slot's partitions from super, then bring up what runs
