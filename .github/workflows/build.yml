@@ -1,62 +1,126 @@
 name: Build
 
-# Every push is linted and tested, and the recovery service, the second
-# system's first program and the packer are built. The image itself is packed
-# on a machine that has the phone's own stock recovery; see scripts/build.sh.
+# Builds the polaris image in full: the device binaries with the NDK, the
+# packer on the host, and then the image on top of the phone's own stock
+# recovery, checked before it is published.
 on:
   push:
     branches: ["**"]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Release tag to publish when the build passes; empty for no release"
+        required: false
+        default: ""
 
 permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+  contents: write
 
 env:
-  CARGO_TERM_COLOR: always
+  DEVICE: polaris
+  DEVICE_NAME: Xiaomi MIX 2S
+  DEVICE_OS: V12.5.1.0.QDGCNXM (Android 10)
+  # The recovery partition takes 64 MiB, as the phone's own table gives it.
+  PARTITION_SIZE: "67108864"
+  # The phone's own recovery partition of this build, taken out of the MIUI
+  # fastboot package: 58 520 910 bytes, no AVB footer, so the size above is
+  # given rather than read from it.
+  STOCK_URL: https://github.com/6ewjso6-gif/skywardMIX2s/releases/download/polaris-v1/polaris-stock-recovery.img
+  STOCK_SHA256: ""
 
 jobs:
-  check:
-    name: Lint and test
+  build:
+    name: Build the recovery
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - name: Lint what runs on the computer
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --locked --workspace
-      - name: Lint what runs on the phone
-        run: cargo ndk -t arm64-v8a --platform 28 clippy --locked -p skyward -p skyward-install -p skyward-systems -p skyward-system-init -- -D warnings
 
-  tools:
-    name: Build the recovery service and the packer
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-      - name: Build the recovery service for the phone
-        run: cargo ndk -t arm64-v8a --platform 28 build --locked --release -p skyward
-      # It runs as a second system's first program, before any library is
-      # there to load.
-      - name: Build the second system's first program, static
-        env:
-          RUSTFLAGS: -C target-feature=+crt-static
-        run: cargo ndk -t arm64-v8a --platform 28 build --locked --release -p skyward-system-init --target-dir target/system-init
-      - name: Build the packer
-        run: cargo build --locked --release -p skyward-pack
-      - name: Gather them
+      - name: Install what the image needs
         run: |
-          mkdir tools
-          cp target/aarch64-linux-android/release/skyward target/release/skyward-pack tools/
-          cp target/system-init/aarch64-linux-android/release/system-init tools/
-      - uses: actions/upload-artifact@v7
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends lz4 zip
+          python3 -m pip install --quiet fonttools
+
+      - name: Free disk before the image
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Keep the stock recovery between runs
+        uses: actions/cache@v4
         with:
-          name: tools
-          path: tools/
+          path: stock/recovery.img
+          key: stock-${{ env.DEVICE }}-v1
+
+      - name: Take the phone's own recovery
+        run: |
+          if [ -s stock/recovery.img ]; then
+            echo "the stock recovery is already here"
+          else
+            mkdir -p stock
+            curl -sSL --retry 5 --retry-delay 3 -o stock/recovery.img "$STOCK_URL"
+          fi
+          ls -l stock/recovery.img
+          if [ -n "$STOCK_SHA256" ]; then
+            echo "$STOCK_SHA256  stock/recovery.img" | sha256sum -c -
+          else
+            echo "no SHA-256 pinned for the stock recovery; what it holds is checked below"
+            test "$(stat -c%s stock/recovery.img)" -gt 40000000
+          fi
+
+      - name: Build the image
+        run: STOCK=stock/recovery.img OUT=out/skyward-$DEVICE.img ./scripts/build.sh
+
+      - name: Check the image the phone would start
+        run: |
+          python3 scripts/verify-image.py "out/skyward-$DEVICE.img" \
+            --expect-recovery-bytes "$PARTITION_SIZE"
+
+      - name: Check the programs against the phone's own libraries
+        run: |
+          python3 scripts/check-symbols.py \
+            target/aarch64-linux-android/release/skyward \
+            stock/recovery.img \
+            target/system-init/aarch64-linux-android/release/system-init
+
+      - name: Name and sum what came out
+        id: name
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+          elif [ -n "${{ inputs.release }}" ]; then
+            tag="${{ inputs.release }}"
+          else
+            tag="polaris-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          img="skyward-$DEVICE-V12.5.1.0.QDGCNXM.img"
+          cp "out/skyward-$DEVICE.img" "out/$img"
+          (cd out && zip -9 "skyward-$DEVICE-V12.5.1.0.QDGCNXM.zip" "$img")
+          (cd out && sha256sum "$img" "skyward-$DEVICE-V12.5.1.0.QDGCNXM.zip" > SHA256SUMS)
+          cat out/SHA256SUMS
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skyward-${{ env.DEVICE }}-image
+          path: |
+            out/skyward-${{ env.DEVICE }}-V12.5.1.0.QDGCNXM.zip
+            out/SHA256SUMS
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 30
+
+      - name: Publish the release
+        if: github.ref_type == 'tag' || inputs.release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.name.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$DEVICE_NAME ($DEVICE) $TAG on $DEVICE_OS" \
+            --notes "Skyward recovery for $DEVICE_NAME ($DEVICE), built on the phone's own stock recovery of $DEVICE_OS." \
+            "out/skyward-$DEVICE-V12.5.1.0.QDGCNXM.zip" \
+            "out/SHA256SUMS"
