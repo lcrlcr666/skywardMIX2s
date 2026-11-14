@@ -112,6 +112,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # The way back: the phone's own recovery partition, so it can be put
+      # back with one fastboot command after Skyward is tried.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DEVICE }}-stock-recovery
+          path: stock/recovery.img
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Publish the release
         if: github.ref_type == 'tag' || inputs.release != ''
         env:

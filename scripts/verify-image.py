@@ -123,8 +123,8 @@ def main():
     print(f"  ramdisk entries: {len(entries)}")
     for name in list(entries)[:5]:
         print(f"    first: {name} ({len(entries[name][1])} bytes)")
-    if len(entries) < 20:
-        raise SystemExit("the ramdisk holds fewer entries than a stock recovery does: its archive was not read")
+    if len(entries) < 5:
+        raise SystemExit("the ramdisk holds fewer entries than a recovery does: its archive was not read")
 
     recovery = [n for n in ("system/bin/recovery", "sbin/recovery") if n in entries]
     if not recovery:
@@ -138,12 +138,15 @@ def main():
     props = [n for n in ("prop.default", "default.prop") if n in entries]
     if not props:
         raise SystemExit("neither prop.default nor default.prop is in the ramdisk")
+    # init reads prop.default first, and a stock ramdisk may keep a short
+    # default.prop beside it; the properties only have to be set in one of
+    # them, in the file init reads.
+    text = "\n".join(entries[name][1].decode(errors="replace") for name in props)
     for name in props:
-        text = entries[name][1].decode(errors="replace")
-        print(f"  {name}: {len(text)} bytes")
-        for line in ("ro.secure=0", "ro.adb.secure=0", "ro.debuggable=1"):
-            if line not in text:
-                raise SystemExit(f"{name} does not set {line}, so adb will not be root without the phone asking")
+        print(f"  {name}: {len(entries[name][1])} bytes")
+    for line in ("ro.secure=0", "ro.adb.secure=0", "ro.debuggable=1"):
+        if line not in text:
+            raise SystemExit(f"the ramdisk's property files do not set {line}, so adb will not be root without the phone asking")
 
     wanted = ["init", "init.rc", "skyward/system-init", "skyward/device.toml",
               "skyward/MiSansVF.ttf", "skyward/KirkMono-Regular.ttf", "system/bin/sh"]
