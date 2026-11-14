@@ -38,17 +38,34 @@ def unpack_ramdisk(ramdisk):
 def cpio_entries(cpio):
     rest = cpio
     while True:
-        if rest[:6] not in CPIO_MAGIC:
+        at = rest.find(b"070701")
+        if at < 0:
             return
-        fields = [int(rest[6 + 8 * i:14 + 8 * i], 16) for i in range(13)]
+        header = rest[at:at + 110]
+        if len(header) < 110:
+            return
+        try:
+            fields = [int(header[6 + 8 * i:14 + 8 * i], 16) for i in range(13)]
+        except ValueError:
+            rest = rest[at + 6:]
+            continue
         size, namesize = fields[6], fields[11]
-        name = rest[110:110 + namesize - 1].decode(errors="replace").lstrip("./")
-        data_at = 110 + namesize
+        if not 1 <= namesize <= 4096 or size > len(rest):
+            rest = rest[at + 6:]
+            continue
+        name_at = at + 110
+        name = rest[name_at:name_at + namesize].split(b"\0")[0].decode(errors="replace").lstrip("./")
+        # Name and data are padded to four bytes from the start of the archive.
+        data_at = name_at + namesize
+        data_at += (4 - data_at % 4) % 4
         data = rest[data_at:data_at + size]
-        rest = rest[(data_at + size + 3) // 4 * 4:]
+        end = data_at + size
+        end += (4 - end % 4) % 4
+        rest = rest[end:]
         if name == "TRAILER!!!":
             return
-        yield name, data
+        if name:
+            yield name, data
 
 
 def elf_symbols(blob):
@@ -91,15 +108,25 @@ def main():
     with open(stock, "rb") as f:
         ramdisk, _ = parse_boot(f.read())
     entries = dict(cpio_entries(unpack_ramdisk(ramdisk)))
+    print(f"the stock recovery ramdisk holds {len(entries)} entries")
     libs = {}
     for name, data in entries.items():
+        if data[:4] != b"\x7fELF":
+            continue
         base = name.rsplit("/", 1)[-1]
-        if base in WANTED and data[:4] == b"\x7fELF":
-            got, _ = elf_symbols(data)
-            libs[base] = got
-            print(f"library in the stock recovery: {name} ({len(got)} defined symbols)")
+        if ".so" not in base:
+            continue
+        got, _ = elf_symbols(data)
+        if got:
+            libs[name] = got
+    for name in sorted(libs):
+        print(f"library in the stock recovery: {name} ({len(libs[name])} defined symbols)")
     if not libs:
-        raise SystemExit("the stock recovery ramdisk holds none of the libraries the program needs")
+        # Whatever the layout, name what is there, so the next run can look
+        # in the right place instead of guessing again.
+        for name in list(entries)[:20]:
+            print(f"  entry: {name} ({len(entries[name])} bytes)")
+        raise SystemExit("the stock recovery ramdisk holds no shared library this could check against")
 
     provided = set().union(*libs.values())
     missing_any = False

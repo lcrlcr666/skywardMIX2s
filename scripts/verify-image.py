@@ -74,10 +74,15 @@ def cpio_entries(cpio):
         name_at = at + 110
         raw = cpio[name_at:name_at + namesize]
         name = raw.split(b"\0")[0].decode(errors="replace").lstrip("./")
+        # Both the name and the data are padded to four bytes, counted from
+        # the start of the archive, so the data begins where the padded name
+        # ends and the next header where the padded data ends.
         data_at = name_at + namesize
+        data_at += (4 - data_at % 4) % 4
         data = cpio[data_at:data_at + size]
         end = data_at + size
-        pos = at + ((end - at + 3) // 4 * 4)
+        end += (4 - end % 4) % 4
+        pos = end
         if name == "TRAILER!!!":
             return
         if name:
