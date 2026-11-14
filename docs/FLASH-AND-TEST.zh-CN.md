@@ -29,17 +29,29 @@
 
    或者直接用本仓库 Release 里那份 `polaris-stock-recovery.img`（同一底包、同一分区）。
 
-## 刷入
+## 先试跑，再决定刷不刷
+
+解锁后的 ABL 支持 `fastboot boot`：把镜像放进内存直接启动，**不写 recovery 分区**。
+这是最省事的验证方式，坏了重启就回到原样：
 
 ```sh
 # 手机进 fastboot（关机后按住 音量- + 电源）
 fastboot devices
+fastboot boot skyward-polaris-V12.5.1.0.QDGCNXM.img
+```
+
+镜像比 `boot` 多了 AVB 尾（它按 64 MiB 分区补齐），bootloader 按 header 里的
+kernel/ramdisk 长度取，多出来的尾巴不理它。
+
+想长期用时再刷进分区：
+
+```sh
 fastboot flash recovery skyward-polaris-V12.5.1.0.QDGCNXM.img
 fastboot reboot recovery
 ```
 
-> 小米 sdm845 机型一般**不支持** `fastboot boot`（bootloader 会校验 boot 影像），
-> 所以别指望"先试跑再刷"；直接从 recovery 分区启动。
+> 刷进分区后，MIUI 系统更新可能把 recovery 换回原厂；Skyward 设置里有"再次刷入
+> Skyward"，打开后系统更新也会保留它。
 
 ## 回滚
 
@@ -47,6 +59,8 @@ fastboot reboot recovery
 fastboot flash recovery polaris-stock-recovery.img
 fastboot reboot
 ```
+
+只是 `fastboot boot` 试过、没刷分区的话，不需要回滚，重启即可。
 
 ## 第一次启动要看什么
 
