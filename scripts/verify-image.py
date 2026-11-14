@@ -47,19 +47,41 @@ def parse_header(buf):
 
 
 def cpio_entries(cpio):
-    rest = cpio
+    """Every entry of a newc archive, read by finding its headers.
+
+    Reading the archive straight through needs the writer's padding to be the
+    one assumed; a writer that pads otherwise leaves the next header a few
+    bytes off. Each header is found by its magic and its own sizes instead, so
+    the entries come out either way.
+    """
+    pos = 0
     while True:
-        if rest[:6] not in (b"070701", b"070702"):
-            raise SystemExit(f"cpio magic {rest[:6]!r} unexpected after {len(cpio) - len(rest)} bytes")
-        fields = [int(rest[6 + 8 * i:14 + 8 * i], 16) for i in range(13)]
+        at = cpio.find(b"070701", pos)
+        if at < 0:
+            return
+        header = cpio[at:at + 110]
+        if len(header) < 110:
+            return
+        try:
+            fields = [int(header[6 + 8 * i:14 + 8 * i], 16) for i in range(13)]
+        except ValueError:
+            pos = at + 6
+            continue
         mode, size, namesize = fields[1], fields[6], fields[11]
-        name = rest[110:110 + namesize - 1].decode(errors="replace").lstrip("./")
-        data_at = 110 + namesize
-        data = rest[data_at:data_at + size]
-        rest = rest[(data_at + size + 3) // 4 * 4:]
+        if not 1 <= namesize <= 4096 or size > len(cpio):
+            pos = at + 6
+            continue
+        name_at = at + 110
+        raw = cpio[name_at:name_at + namesize]
+        name = raw.split(b"\0")[0].decode(errors="replace").lstrip("./")
+        data_at = name_at + namesize
+        data = cpio[data_at:data_at + size]
+        end = data_at + size
+        pos = at + ((end - at + 3) // 4 * 4)
         if name == "TRAILER!!!":
             return
-        yield name, mode, data
+        if name:
+            yield name, mode, data
 
 
 def main():
@@ -99,6 +121,10 @@ def main():
 
     entries = {name: (mode, data) for name, mode, data in cpio_entries(cpio)}
     print(f"  ramdisk entries: {len(entries)}")
+    for name in list(entries)[:5]:
+        print(f"    first: {name} ({len(entries[name][1])} bytes)")
+    if len(entries) < 20:
+        raise SystemExit("the ramdisk holds fewer entries than a stock recovery does: its archive was not read")
 
     recovery = [n for n in ("system/bin/recovery", "sbin/recovery") if n in entries]
     if not recovery:
