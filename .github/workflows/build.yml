@@ -30,8 +30,8 @@ env:
   # ramdisk are the pair that boots on this phone's firmware. It carries a
   # full recovery userspace (Android 11 libraries) that an Android 16 system
   # can be read from, where the stock MIUI recovery's Android 10 one cannot.
-  STOCK_URL: https://github.com/lcrlcr666/skywardMIX2s/releases/download/polaris-base/orange-fox-polaris.img
-  STOCK_SHA256: "d2a24292f005d1f912bd5b752715ee54e32c371154500360dbb160f360d69bc0"
+  STOCK_URL: https://github.com/lcrlcr666/skywardMIX2s/releases/download/polaris-base/rom-kernel-base.img
+  STOCK_SHA256: "ad4611baa30e34e8d3aa6e6b2bdf0fcfe4e1b8ca59c5c509631c10627bb38506"
 
 jobs:
   build:
@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: stock/recovery.img
-          key: base-${{ env.DEVICE }}-offox-v1
+          key: base-${{ env.DEVICE }}-romkernel-v1
 
       - name: Take the phone's own recovery
         run: |

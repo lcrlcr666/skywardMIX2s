@@ -61,11 +61,9 @@ pack() {
     --out "$OUT"
 }
 
-# 20 MiB 的完整字重和 42 MiB 的内核挤不进 64 MiB 分区，换成常用字符的子集。
-if ! pack resources/fonts/MiSansVF.ttf; then
-  echo "==> 完整字体放不下，改压子集字体"
-  pack "$(./scripts/subset-font.sh | tail -1)"
-fi
+# 20 MiB 的完整字重放不进 64 MiB 分区（内核就占了 26 MiB），只压常用字符：
+# ASCII、拉丁补充、常用标点、GB2312 的 6763 个汉字。
+pack "$(./scripts/subset-font.sh | tail -1)"
 
 echo
 echo "完成：$OUT（$(stat -c%s "$OUT") 字节）"
