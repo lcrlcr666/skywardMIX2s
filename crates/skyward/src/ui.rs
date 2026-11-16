@@ -2541,20 +2541,34 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                     }
                     Effect::StopBackup => backuper.as_ref().context("there is no backup or restore to stop")?.stop(),
                     Effect::ReadUpdate => {
-                        let slot = info.slot.context("only an A/B phone has an update to merge")?;
-                        // A merge followed tells where it stands itself.
-                        if merger.is_none() {
-                            app.set_update(skyward_vab::standing(slot)?);
+                        match info.slot {
+                            Some(slot) => {
+                                // A merge followed tells where it stands itself.
+                                if merger.is_none() {
+                                    app.set_update(skyward_vab::standing(slot)?);
+                                }
+                                // An update in the other slot starts with that
+                                // slot, which a system's updater may not have
+                                // set yet.
+                                app.set_boot_slots(read_slots());
+                            }
+                            // A phone that is not A/B keeps one copy of every
+                            // partition and has no update to merge: the page
+                            // says there is none instead of the recovery
+                            // stopping, which is what a missing slot did.
+                            None => app.set_update(skyward_vab::Standing::None),
                         }
-                        // An update in the other slot starts with that slot,
-                        // which a system's updater may not have set yet.
-                        app.set_boot_slots(read_slots());
                     }
                     Effect::Merge => {
                         ensure!(merger.is_none(), "the update is being merged already");
-                        let slot = info.slot.context("only an A/B phone merges an update")?;
-                        skyward_sys::kmsg("merging the update, as the update page asked")?;
-                        merger = Some(merge::Merger::start(slot, true)?);
+                        // A phone that is not A/B has no second slot for an
+                        // update to be merged into.
+                        if let Some(slot) = info.slot {
+                            skyward_sys::kmsg("merging the update, as the update page asked")?;
+                            merger = Some(merge::Merger::start(slot, true)?);
+                        } else {
+                            skyward_sys::kmsg("an A-only phone has no update to merge")?;
+                        }
                     }
                     Effect::Wlan(on) => wlan_worker(&wlan)?.send(if on { wlan::Command::On } else { wlan::Command::Off }),
                     Effect::ScanWlan => {

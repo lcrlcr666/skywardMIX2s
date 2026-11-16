@@ -181,7 +181,10 @@ impl SystemProps {
         }
         let props = match skyward_vab::current_slot()? {
             Some(slot) => installed_props(slot)?,
-            None => HashMap::new(),
+            // A phone that is not A/B keeps one copy of every partition: its
+            // properties are read like any other phone's, and an empty map was
+            // why the pages could not say which system is installed.
+            None => installed_props(skyward_vab::Slot::None)?,
         };
         Ok(SystemProps::Installed(props))
     }
