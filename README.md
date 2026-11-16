@@ -10,12 +10,22 @@ recovery 做底，并由 GitHub Actions 直接构建出可刷镜像。
 
 | 项目 | 结果 |
 | --- | --- |
-| 刷入 recovery 分区后启动 | ✅ 界面出得来 |
-| 构建 | ✅ GitHub Actions，`polaris-v4` 起 |
+| 刷入 recovery 分区后启动 | ✅ 界面出来、能操作（`polaris-v9` 起） |
+| 显示（DRM） | ✅ legacy `set_crtc` + page flip，接管 bootloader 的 splash |
+| 触摸 / 输入 | ✅ `/dev/input` 已打开 |
+| 背光 | ✅ 面板 DT 节点名字对不上时回退到 `max_brightness` |
+| 构建 | ✅ GitHub Actions |
 | 底子 | OrangeFox R11.1 for polaris 的 `recovery.img` |
 | 测试机 | Mi MIX 2S（polaris），InfinityX（Android 16），内核 4.19.325 |
 
-未适配：`/data` 解密、Wi-Fi、MTP、双系统、fastbootd、payload OTA（原因见文末）。
+还没适配：
+
+| 项目 | 现在还缺什么 |
+| --- | --- |
+| 更新状态 / 系统信息 | 要把已装的 `system`/`vendor` 挂到**不遮住 ramdisk** 的位置（`/mnt/system`、`/vendor`），才能读 `build.prop` |
+| `/data` 解密 | 这台机器是 `keymaster@4.0` + `gatekeeper@1.0`（`/vendor/lib64/hw` 里只有 `android.hardware.gatekeeper@1.0-impl-qti.so`），Skyward 的解密路径照的是新机的 `keymint`/`keystore2` |
+| Wi-Fi | 要拉起 `wpa_supplicant`、加载 vendor 的 ko、对齐 ueventd 规则 |
+| MTP / 双系统 / fastbootd / payload OTA | A-only + 无 super，本来就不适用或要另写 |
 
 ## 为什么用 OrangeFox 做底，而不是原厂 MIUI 的 recovery
 
