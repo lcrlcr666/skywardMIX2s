@@ -332,6 +332,11 @@ pub struct Partitions {
     /// them starts.
     #[serde(default)]
     pub mounted: Vec<String>,
+    /// The partition super is kept on, where the phone's dynamic partitions
+    /// were made over a partition of another name: the phones of this
+    /// generation keep theirs on the one called system.
+    #[serde(default)]
+    pub super: Option<String>,
 }
 
 /// A program from the phone's own partitions that the recovery keeps

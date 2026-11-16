@@ -282,16 +282,35 @@ impl Update {
 }
 
 pub fn snapshot_state() -> Result<SnapshotState> {
-    if !skyward_block::mount::is_mount_point(Path::new(METADATA))? {
-        return Ok(SnapshotState::Unknown);
+    if !mount_metadata() {
+        // Nothing of an update can be read where the phone keeps no metadata;
+        // a phone that does keep one has it mounted by now.
+        return Ok(if skyward_block::fstab::partition("metadata")?.is_some() { SnapshotState::Unknown } else { SnapshotState::None });
     }
     Ok(read_state(Path::new(OTA_DIR))?.phase())
+}
+
+/// Mount /metadata where the phone's own table keeps it, if it does: the
+/// phones of this generation keep theirs on the partition called logdump,
+/// and the table is the only thing that says so.
+fn mount_metadata() -> bool {
+    if skyward_block::mount::is_mount_point(Path::new(METADATA)).unwrap_or(false) {
+        return true;
+    }
+    let Ok(Some(entry)) = skyward_block::fstab::partition("metadata") else { return false };
+    let Ok(device) = skyward_block::fstab::device(&entry) else { return false };
+    let _ = std::fs::create_dir_all(Path::new(METADATA));
+    let mut options = entry.options.clone();
+    if !options.iter().any(|o| o == "ro") {
+        options.push("ro".to_string());
+    }
+    skyward_block::mount::mount(Path::new(&device), Path::new(METADATA), &entry.filesystem, &options).is_ok()
 }
 
 /// The update libsnapshot keeps track of, where /metadata is mounted to
 /// tell; `None` where it is not.
 pub fn update() -> Result<Option<Update>> {
-    if !skyward_block::mount::is_mount_point(Path::new(METADATA))? {
+    if !mount_metadata() {
         return Ok(None);
     }
     read_update(Path::new(OTA_DIR)).map(Some)

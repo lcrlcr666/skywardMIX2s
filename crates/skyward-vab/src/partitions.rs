@@ -36,8 +36,16 @@ pub fn mount_point(base: &str) -> PathBuf {
     }
 }
 
+/// Why the phone's super is on a partition of another name, where it is.
+static SUPER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Say which partition the phone keeps super on, where it is not "super".
+pub fn set_super_partition(name: &str) {
+    let _ = SUPER.set(name.to_string());
+}
+
 fn super_device() -> PathBuf {
-    Path::new(BY_NAME).join("super")
+    Path::new(BY_NAME).join(SUPER.get().map(String::as_str).unwrap_or("super"))
 }
 
 /// The device numbers of super and its extra block devices, in the order
