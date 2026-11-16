@@ -492,6 +492,9 @@ pub mod kms {
         crtc: drm::control::crtc::Handle,
         active: property::Handle,
         mode_id: property::Handle,
+        /// The mode the panel came up in, kept to set it again when the
+        /// display is turned back on after being off.
+        mode: drm::control::Mode,
         /// The panel's preferred mode, which it comes up in, and its
         /// fastest, which it switches to after, where that is another.
         preferred: property::Value<'static>,
@@ -768,6 +771,7 @@ pub mod kms {
                 crtc,
                 active,
                 mode_id,
+                mode,
                 preferred: first,
                 fastest,
                 spr,
@@ -920,11 +924,18 @@ pub mod kms {
             }
             let fb = buf.fb;
             if self.legacy {
-                // A page flip on the CRTC the legacy call set up: the frame's
-                // buffer is handed to the display, and the flip event says when
-                // it was sent.
                 self.settle()?;
-                self.card.page_flip(self.crtc, fb, PageFlipFlags::EVENT, None).context("flip")?;
+                if self.power == Power::On {
+                    // A page flip on the CRTC the legacy call set up: the
+                    // frame's buffer is handed to the display, and the flip
+                    // event says when it was sent.
+                    self.card.page_flip(self.crtc, fb, PageFlipFlags::EVENT, None).context("flip")?;
+                } else {
+                    // The display was turned off, so its CRTC is set again with
+                    // the mode the panel came up in: this frame is the first it
+                    // scans out after that.
+                    self.card.set_crtc(self.crtc, Some(fb), (0, 0), &[self.conn], Some(self.mode)).context("turn the display on")?;
+                }
                 self.flipping = true;
                 self.power = Power::On;
                 self.back = (self.back + 1) % self.bufs.len();

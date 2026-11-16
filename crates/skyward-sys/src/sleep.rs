@@ -60,12 +60,10 @@ pub struct Sleeper {
 
 impl Sleeper {
     pub fn start() -> Result<Sleeper> {
-        // A kernel that will not take the name still sleeps when asked for
-        // it, and the phone stays usable either way, so the reason is left to
-        // whoever reads this: the recovery keeps running.
-        if let Err(e) = fs::write(MEM_SLEEP, "s2idle") {
-            eprintln!("the sleep state was not set: {e} ({MEM_SLEEP})");
-        }
+        // A kernel that refuses the state is not left to sleep: a dark screen
+        // that never comes back is worse than one that stays awake, so the
+        // caller is told and the recovery runs without a sleeper.
+        fs::write(MEM_SLEEP, "s2idle").with_context(|| format!("write s2idle to {MEM_SLEEP}"))?;
         let mut fds = [0; 2];
         if unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC | libc::O_NONBLOCK) } != 0 {
             return Err(std::io::Error::last_os_error()).context("make the sleeper's wake pipe");

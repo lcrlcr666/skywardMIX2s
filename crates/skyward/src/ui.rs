@@ -1438,7 +1438,17 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     let mut skyward_checker: Option<updates::Worker> = None;
     let mut skyward_updater: Option<updates::Worker> = None;
     // The phone sleeps while its screen is off and nothing needs it awake.
-    let sleeper = Sleeper::start()?;
+    // The phone sleeps while its screen is off and nothing needs it awake. A
+    // kernel that refuses the sleep state leaves the recovery awake instead:
+    // the screen goes dark, and the next touch or key brings it back. Ten
+    // seconds of dark screen costs less than a phone that never wakes.
+    let sleeper = match Sleeper::start() {
+        Ok(sleeper) => Some(sleeper),
+        Err(e) => {
+            skyward_sys::kmsg(&format!("the phone will not sleep, so a dark screen stays wakeable: {e:#}"))?;
+            None
+        }
+    };
     // A uevent may be a charger or a computer attached or taken away: the
     // battery is read at once, and the phone stays awake until it is.
     let uevents = uevent::Listener::open()?;
@@ -1605,8 +1615,13 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
             && !running
             && asked.is_none()
             && usb_link()? != UsbLink::Connected;
-        sleeper.allow(may_sleep);
-        let mut fds = vec![inputs.fd(), uevents.fd(), sleeper.fd()];
+        if let Some(sleeper) = &sleeper {
+            sleeper.allow(may_sleep);
+        }
+        let mut fds = vec![inputs.fd(), uevents.fd()];
+        if let Some(sleeper) = &sleeper {
+            fds.push(sleeper.fd());
+        }
         if let Some(i) = &installer {
             fds.push(i.fd());
         }
@@ -1658,10 +1673,12 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
         fds.push(readings.fd());
         wait(&fds, timeout)?;
         let now = monotonic_ms();
-        for slept in sleeper.slept() {
-            match slept {
-                Slept::Woke => skyward_sys::kmsg("the phone slept and woke")?,
-                Slept::Refused(why) => skyward_sys::kmsg(&format!("the phone did not sleep: {why}"))?,
+        if let Some(sleeper) = &sleeper {
+            for slept in sleeper.slept() {
+                match slept {
+                    Slept::Woke => skyward_sys::kmsg("the phone slept and woke")?,
+                    Slept::Refused(why) => skyward_sys::kmsg(&format!("the phone did not sleep: {why}"))?,
+                }
             }
         }
         if uevents.heard()? {
