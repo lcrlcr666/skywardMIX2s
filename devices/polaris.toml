@@ -6,6 +6,8 @@ model = "Xiaomi Mi MIX 2S"
 ab = false
 soc = { hans = "骁龙®845移动平台", hant = "Snapdragon® 845 行動平台", en = "Snapdragon® 845 Mobile Platform" }
 os_version_prop = "ro.build.version.incremental"
+# The pages start in Simplified Chinese unless the system asks for another.
+locale = "zh-CN"
 
 [display]
 # 5.99 inches, 18.7:9; the panel reports 1080x2160 and the image is built on

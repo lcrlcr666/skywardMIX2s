@@ -276,6 +276,11 @@ pub struct Device {
     /// System property that carries the vendor OS version.
     #[serde(default = "default_os_version_prop")]
     pub os_version_prop: String,
+    /// The language the pages start in where nothing else names one: the
+    /// work the system asked for, the installed system's locale and the
+    /// language chosen before all come first.
+    #[serde(default)]
+    pub locale: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

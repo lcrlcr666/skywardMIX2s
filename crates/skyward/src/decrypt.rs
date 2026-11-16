@@ -43,7 +43,13 @@ impl Decryptor {
             .name("decrypt".into())
             .spawn(move || {
                 let ended_as = match job {
-                    Job::Open => Ended::Opened(with_key_service(data::open_without_credential)),
+                    // A phone whose system never turned the encryption on opens
+                    // as it is; only one that did asks the secure world for keys.
+                    Job::Open => Ended::Opened(match data::open_as_it_is() {
+                        Ok(Some(opened)) => Ok(opened),
+                        Ok(None) => with_key_service(data::open_without_credential),
+                        Err(e) => Err(format!("{e:#}")),
+                    }),
                     Job::Unlock { closed, user, credential } => {
                         Ended::Unlocked(with_key_service(|service| data::unlock(service, &closed, user, &credential)))
                     }

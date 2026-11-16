@@ -623,3 +623,33 @@ mod tests {
         assert!(wrapped);
     }
 }
+
+/// Open the data partition of a phone whose system never turned the
+/// encryption on: it mounts as it is, and what the system keeps of its own
+/// reads plainly. None where it is encrypted, so that the keys are asked
+/// for instead.
+pub fn open_as_it_is() -> Result<Option<Opening>> {
+    let at = Path::new(MOUNT);
+    let mut mounted = false;
+    if !mount::is_mount_point(at)? {
+        let device = Path::new(skyward_block::BY_NAME).join(MAPPED);
+        for filesystem in ["f2fs", "ext4"] {
+            let options = ["noatime".to_string()];
+            if mount::mount(&device, at, filesystem, &options).is_ok() {
+                mounted = true;
+                break;
+            }
+        }
+        if !mounted {
+            return Ok(None);
+        }
+    }
+    // Names a phone encrypted are unreadable and its own files refuse to
+    // open; both read plainly where nothing was ever encrypted.
+    let plain = std::fs::read("/data/system/packages.xml").map(|b| !b.is_empty()).unwrap_or(false)
+        || std::fs::read_dir("/data/misc").map(|mut d| std::fs::read_dir("/data/misc").map(|_| d.next().is_some()).unwrap_or(false)).unwrap_or(false);
+    if !plain {
+        return Ok(None);
+    }
+    Ok(Some(Opening { mounted: None, closed: Vec::new() }))
+}
