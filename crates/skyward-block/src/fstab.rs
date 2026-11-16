@@ -9,12 +9,12 @@ use std::path::{Path, PathBuf};
 /// the recovery ramdisk as /etc/recovery.fstab, whose fifth column holds
 /// the same flags.
 pub const FILES: [&str; 5] = [
-    /vendor/etc/fstab.qcom,
-    /odm/etc/fstab.qcom,
+    "/vendor/etc/fstab.qcom",
+    "/odm/etc/fstab.qcom",
     // The installed system's own table, mounted beside the recovery where the
     // recovery's /vendor is the ramdisk's.
-    /mnt/vendor/etc/fstab.qcom,
-    /etc/recovery.fstab,
+    "/mnt/vendor/etc/fstab.qcom",
+    "/etc/recovery.fstab",
 ];
 
 /// One filesystem the phone knows about.
