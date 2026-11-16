@@ -635,32 +635,50 @@ pub mod kms {
             let bufs = [make()?, make()?, make()?];
 
             let crtc_id = u64::from(u32::from(crtc));
+            // What the bootloader left on the panel. Where the CRTC already
+            // drives it with a mode, the pipeline is taken over as it stands:
+            // only the planes' framebuffer changes and no mode is set. Asking
+            // for a mode set here means disabling the bridge the splash is on
+            // and enabling it again, which this display does not survive —
+            // "dsi_bridge_post_disable wrong doze state" — and the commit then
+            // waits for ever.
+            let left = card.get_crtc(crtc).context("read CRTC")?.mode();
+            let handover = left.is_some();
             let mut req = atomic::AtomicModeReq::new();
-            for &other in res.connectors().iter().filter(|&&c| c != conn.handle()) {
-                let props = Props::read(&card, other)?;
-                if props.value("CRTC_ID")? == crtc_id {
-                    req.add_property(other, props.handle("CRTC_ID")?, property::Value::CRTC(None));
+            if !handover {
+                for &other in res.connectors().iter().filter(|&&c| c != conn.handle()) {
+                    let props = Props::read(&card, other)?;
+                    if props.value("CRTC_ID")? == crtc_id {
+                        req.add_property(other, props.handle("CRTC_ID")?, property::Value::CRTC(None));
+                    }
                 }
             }
             let crtc_props = Props::read(&card, crtc)?;
             let blob = card.create_property_blob(&mode).context("create mode blob")?;
-            let first = card.create_property_blob(preferred).context("create mode blob")?;
-            req.add_property(conn.handle(), conn_props.handle("CRTC_ID")?, property::Value::CRTC(Some(crtc)));
-            // The mode is DSC-compressed: select its DSC variant, as Android's
-            // compositor does.
-            if layout.dsc {
-                let (id, _) = conn_props.get("dsc_mode")?;
-                req.add_property(conn.handle(), id, property::Value::UnsignedRange(enum_value(&card, id, "dsc_enabled")?));
-            }
-            // Frame starts are posted to the hardware: the driver's own
-            // default on display hardware of this generation, and Android's
-            // compositor sets the same.
-            if let Ok((id, _)) = conn_props.get("frame_trigger_mode") {
-                req.add_property(conn.handle(), id, property::Value::UnsignedRange(enum_value(&card, id, "posted_start")?));
+            let first = match left {
+                Some(left) => card.create_property_blob(&left).context("create mode blob")?,
+                None => card.create_property_blob(preferred).context("create mode blob")?,
+            };
+            if !handover {
+                req.add_property(conn.handle(), conn_props.handle("CRTC_ID")?, property::Value::CRTC(Some(crtc)));
+                // The mode is DSC-compressed: select its DSC variant, as
+                // Android's compositor does.
+                if layout.dsc {
+                    let (id, _) = conn_props.get("dsc_mode")?;
+                    req.add_property(conn.handle(), id, property::Value::UnsignedRange(enum_value(&card, id, "dsc_enabled")?));
+                }
+                // Frame starts are posted to the hardware: the driver's own
+                // default on display hardware of this generation, and Android's
+                // compositor sets the same.
+                if let Ok((id, _)) = conn_props.get("frame_trigger_mode") {
+                    req.add_property(conn.handle(), id, property::Value::UnsignedRange(enum_value(&card, id, "posted_start")?));
+                }
             }
             let (mode_id, active) = (crtc_props.handle("MODE_ID")?, crtc_props.handle("ACTIVE")?);
-            req.add_property(crtc, mode_id, first);
-            req.add_property(crtc, active, property::Value::Boolean(true));
+            if !handover {
+                req.add_property(crtc, mode_id, first);
+                req.add_property(crtc, active, property::Value::Boolean(true));
+            }
             // A panel whose sub-pixel rendering is the display processor's
             // has it set up with each mode set: this one, the switch to the
             // fastest refresh, and each time the display comes on again.
@@ -681,13 +699,17 @@ pub mod kms {
                 }
                 Err(_) => None,
             };
-            if let Some((id, setup, _)) = spr {
-                req.add_property(crtc, id, setup);
+            if let Some((id, setup, _)) = &spr {
+                if !handover {
+                    req.add_property(crtc, *id, setup.clone());
+                }
             }
-            for &other in attached.iter().filter(|&&p| !candidates.iter().any(|c| c.0 == p)) {
-                let props = Props::read(&card, other)?;
-                req.add_property(other, props.handle("FB_ID")?, property::Value::Framebuffer(None));
-                req.add_property(other, props.handle("CRTC_ID")?, property::Value::CRTC(None));
+            if !handover {
+                for &other in attached.iter().filter(|&&p| !candidates.iter().any(|c| c.0 == p)) {
+                    let props = Props::read(&card, other)?;
+                    req.add_property(other, props.handle("FB_ID")?, property::Value::Framebuffer(None));
+                    req.add_property(other, props.handle("CRTC_ID")?, property::Value::CRTC(None));
+                }
             }
             let strip = w / layout.mixers;
             let mut planes = Vec::new();
@@ -708,21 +730,23 @@ pub mod kms {
             }
             // The panel comes up in its preferred mode, then switches to the
             // fastest, as `to_fastest` says why.
-            commit(&card, req, AtomicCommitFlags::ALLOW_MODESET).context("set the panel mode")?;
-            let fastest = (mode.vrefresh() != preferred.vrefresh()).then_some(blob);
+            let flags = if handover { AtomicCommitFlags::empty() } else { AtomicCommitFlags::ALLOW_MODESET };
+            commit(&card, req, flags).context("set the panel mode")?;
+            let fastest = if handover { None } else { (mode.vrefresh() != preferred.vrefresh()).then_some(blob) };
 
             let ids: Vec<u32> = planes.iter().map(|p| u32::from(p.0)).collect();
             let summary = format!(
-                "{:?} connector {} mode {:?} {w}x{h} {} Hz, crtc {}, planes {ids:?} {:?}{}",
+                "{:?} connector {} mode {:?} {w}x{h} {} Hz, crtc {}, planes {ids:?} {:?}{}{}",
                 conn.interface(),
                 u32::from(conn.handle()),
                 mode.name(),
                 mode.vrefresh(),
                 u32::from(crtc),
                 fourcc,
-                spr.as_ref().map(|(_, _, name)| format!(", sub-pixel rendering through {name}")).unwrap_or_default()
+                spr.as_ref().map(|(_, _, name)| format!(", sub-pixel rendering through {name}")).unwrap_or_default(),
+                if handover { ", taken over from the bootloader" } else { "" }
             );
-            let spr = spr.map(|(id, setup, _)| (id, setup));
+            let spr = if handover { None } else { spr.map(|(id, setup, _)| (id, setup)) };
             let lp = match conn_props.get("LP") {
                 Ok((id, _)) => Some((id, enum_value(&card, id, "ON")?, enum_value(&card, id, "LP2")?)),
                 Err(_) => None,
@@ -749,7 +773,9 @@ pub mod kms {
                 order,
                 summary,
             };
-            s.to_fastest()?;
+            if !handover {
+                s.to_fastest()?;
+            }
             Ok(s)
         }
 
