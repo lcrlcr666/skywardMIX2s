@@ -847,6 +847,12 @@ fn prepare(cfg: &DeviceConfig, slot: skyward_vab::Slot) -> Result<()> {
         // The installed system is mounted where nothing of the recovery is
         // shadowed: its build properties say which system is installed, and
         // its files can be browsed. The ramdisk's own /system stays as it is.
+        // The installed vendor is mounted beside the recovery as well: its
+        // table names the partitions this phone keeps, metadata among them.
+        match skyward_block::fstab::mount_at("vendor", Path::new("/mnt/vendor")) {
+            Ok(at) => skyward_sys::kmsg(&format!("vendor is mounted on {}", at.display()))?,
+            Err(e) => skyward_sys::kmsg(&format!("vendor is not mounted: {e:#}"))?,
+        }
         match skyward_block::fstab::mount_at("system", Path::new("/mnt/system")) {
             Ok(at) => skyward_sys::kmsg(&format!("system is mounted on {}", at.display()))?,
             Err(e) => skyward_sys::kmsg(&format!("system is not mounted: {e:#}"))?,

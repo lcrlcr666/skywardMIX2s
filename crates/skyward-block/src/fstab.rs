@@ -8,7 +8,14 @@ use std::path::{Path, PathBuf};
 /// keep it in the vendor or odm partition; Android 9 and earlier keep it in
 /// the recovery ramdisk as /etc/recovery.fstab, whose fifth column holds
 /// the same flags.
-pub const FILES: [&str; 3] = ["/vendor/etc/fstab.qcom", "/odm/etc/fstab.qcom", "/etc/recovery.fstab"];
+pub const FILES: [&str; 5] = [
+    /vendor/etc/fstab.qcom,
+    /odm/etc/fstab.qcom,
+    // The installed system's own table, mounted beside the recovery where the
+    // recovery's /vendor is the ramdisk's.
+    /mnt/vendor/etc/fstab.qcom,
+    /etc/recovery.fstab,
+];
 
 /// One filesystem the phone knows about.
 #[derive(Debug, Clone, PartialEq, Eq)]
