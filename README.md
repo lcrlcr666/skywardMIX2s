@@ -1,110 +1,112 @@
-# Skyward for 小米 MIX 2S（polaris）
+# Skyward Recovery · 小米 MIX 2S（polaris）
 
-把 [kirklin/skyward](https://github.com/kirklin/skyward) 移植到小米 MIX 2S 的仓库：
-A-only 分区适配、boot image v0–v2 与 gzip / LZ4 ramdisk 支持，以及在原厂
-MIUI recovery 上构建好的可刷镜像。
+把 [kirklin/skyward](https://github.com/kirklin/skyward) 移植到小米 MIX 2S：
+A-only 分区适配、boot image v0–v2 与 gzip ramdisk、用这台手机上确定能启动的
+recovery 做底，并由 GitHub Actions 直接构建出可刷镜像。
 
-Skyward 是一个用 Rust 从零写的 recovery：解密 data、刷机、在线更新、备份、
-文件管理、终端、adb / MTP，跑的是手机自己的内核驱动与原厂服务。
+**已在真机上点亮**（见下「状态」）。
 
-## 设备
+## 状态
 
-| 项目 | 值 |
+| 项目 | 结果 |
 | --- | --- |
-| 代号 | `polaris` |
-| 机型 | 小米 MIX 2S |
-| 平台 | 骁龙 845 |
-| 分区方案 | A-only，单 boot / recovery，无 super、无 A/B 槽位 |
-| 屏幕 | 1080 × 2248，440 dpi |
-| recovery 分区 | 64 MiB（kernel 就占 42 MiB，ramdisk 只有 22 MiB 可用） |
-| 原厂基线 | MIUI V12.5.1.0.QDGCNXM（Android 10） |
+| 刷入 recovery 分区后启动 | ✅ 界面出得来 |
+| 构建 | ✅ GitHub Actions，`polaris-v4` 起 |
+| 底子 | OrangeFox R11.1 for polaris 的 `recovery.img` |
+| 测试机 | Mi MIX 2S（polaris），InfinityX（Android 16），内核 4.19.325 |
 
-## 直接刷机
+未适配：`/data` 解密、Wi-Fi、MTP、双系统、fastbootd、payload OTA（原因见文末）。
 
-预编译镜像在 [Releases](../../releases/tag/polaris-v1) 里，是整分区镜像
-（64 MiB，正好填满 recovery 分区），解压后在 fastboot 下写入：
+## 为什么用 OrangeFox 做底，而不是原厂 MIUI 的 recovery
 
-```sh
-sha256sum skyward-polaris-V12.5.1.0.QDGCNXM.img
-fastboot flash recovery skyward-polaris-V12.5.1.0.QDGCNXM.img
-fastboot reboot recovery
+Skyward 的做法是：**保留底子的 kernel 和 ramdisk，只把 `system/bin/recovery` 换成
+它自己**。所以底子必须是这台机器上"确定能启动"的那一对 kernel + ramdisk。
+
+- MIUI 12.5（Android 10）的原厂 recovery：4.9 内核 + 一个很小的 AOSP ramdisk。
+  在现在跑 Android 16 / 4.19 的机器上试过两版，**屏幕始终黑**——Skyward 起来了、
+  日志也写了，就是没画出东西。
+- OrangeFox R11.1（`ro.twrp.version=R11.1_4`）：22.5 MB 内核 + 30 MB ramdisk，带一套
+  Android 11 的完整 recovery userspace（`/system/lib64`、linker、toybox…）。这台机器
+  上它本来就能启动，Skyward 换进去也起得来。
+
+从正在运行的 OrangeFox 里读到的显示事实，也解释了为什么这条路对：
+
+```
+/dev/dri/card0  /dev/dri/controlD64  /dev/dri/renderD128     ← 没有 /dev/graphics
+[ 0.97] [drm] found continuous splash base address:9d400000 size:2400000
+msm_drm ae00000.qcom,mdss_mdp: bound ... dsi-display@18
 ```
 
-镜像是在原厂 recovery 上盖出来的：原厂的 init、adbd、SELinux 策略、驱动库和
-触摸固件都保留，只把 `system/bin/recovery` 换成 Skyward，所以显示、触摸、解密
-走的是这台手机自己的驱动。
+这台机器的 recovery 就是走 DRM/KMS 的，Skyward 用 DRM 画屏正好对得上。
 
-> 需要先解 BL 锁。刷入会覆盖原厂 recovery，MIUI 系统更新可能把它换回去。
+## 踩过的坑（都已在代码里修掉）
+
+1. **ramdisk 就是 `/system`**。设备配置原来写 `mounted = ["system"]`，启动时把
+   *已安装系统* 的 `/system` 挂到 recovery 自己的 `/system` 上 —— 于是 `/system/bin/sh`、
+   `libc.so`、`adb shell` 全部失效（`Too many symbolic links`），该版本就是黑屏的元凶。
+   现在只挂 `vendor`。
+2. **底子不是"原厂"就拒绝**。打包器原本看到 `twres/`、`FFiles/`（第三方 recovery 自带页面）
+   就直接 bail；现在改成**丢弃**这些目录继续：它们的空间正好给 Skyward 的界面用
+   （`twres` 占 9.8 MB）。
+3. **早退让界面永远出不来**。`misc` 读不到、USB 状态机没就绪都会让进程直接退出，
+   init 立刻重启 → 黑屏死循环。现在这些失败只记录、不退出。
+4. **日志活不过重启**。原来日志在 ramdisk（tmpfs）。现在优先写
+   `/cache/skyward-recovery.log`；底子自带 fstab 读不出来时按分区名直接挂 `/cache`，
+   所以黑屏也能事后取证。
 
 ## 从源码构建
 
-依赖：Rust stable（版本见 `rust-toolchain.toml`）、Android NDK r29、cargo-ndk、
-lz4；压子集字体还要 fonttools（`pip install fonttools`）。
-
 ```sh
-rustup target add aarch64-linux-android
-cargo install cargo-ndk
-export NDK_HOME=$HOME/Android/Sdk/ndk/29.0.14206865   # 换成你的 NDK 路径
-./scripts/build.sh
+cargo ndk -t arm64-v8a --platform 28 build --release -p skyward
+RUSTFLAGS="-C target-feature=+crt-static" cargo ndk -t arm64-v8a --platform 28 build --release -p skyward-system-init --target-dir target/system-init
+cargo build --release -p skyward-pack
+STOCK=stock/recovery.img OUT=out/skyward-polaris.img ./scripts/build.sh
 ```
 
-脚本依次做四件事：
+`stock/recovery.img` 就是底子（OrangeFox 的整分区镜像）。
 
-1. 用 `--platform 28` 编译设备端 `skyward`（Android 9 的接口足够，再高没有意义）；
-2. 加 `crt-static` 静态编译 `skyward-system-init`；
-3. 编译主机端打包器 `skyward-pack`；
-4. 在原厂 recovery 上盖出 Skyward，填满 64 MiB 分区。
+### CI
 
-产物在 `out/skyward-polaris.img`，脚本最后打印大小和 SHA-256。
+`.github/workflows/build.yml`：Ubuntu 24.04 + Rust（`rust-toolchain.toml`）+ NDK r29 +
+cargo-ndk，然后
 
-原厂镜像用 [polaris-v1 Release](../../releases/tag/polaris-v1) 里的
-`polaris-stock-recovery.img`，放到 `stock/recovery.img`；也可以用
-`STOCK=/path/to/recovery.img ./scripts/build.sh` 指定线刷包里的
-`images/recovery.img`。
+1. 取底子镜像（`polaris-base` release 里的 `orange-fox-polaris.img`，按 SHA-256 校验并缓存）；
+2. 编三个产物并打包：丢弃 `twres/FFiles/res`，换掉 `system/bin/recovery`，加字体与配置，
+   按 64 MiB 分区补齐 AVB 尾；
+3. `scripts/verify-image.py` 检查镜像结构（header、ramdisk、被替换的 recovery 程序、
+   `ro.secure=0`、AVB 尾、整分区大小）；
+4. `scripts/check-symbols.py` 拿 Skyward 的导入符号和底子 ramdisk 里的 `libc.so`/`liblog.so`
+   对账——缺符号等于手机上加不起来。
 
-> 卡刷包（`.zip`）里没有 `recovery.img`：它不带 payload，更新时也不碰 recovery
-> 分区。原厂镜像在线刷包的 `images/` 下。
+全过才上传产物。
 
-### 64 MiB 的取舍
+## 刷入
 
-K20 Pro 的内核有 42 MiB，64 MiB 分区留给 ramdisk 的只有 22 MiB，而 20 MiB 的
-MiSans 可变字体放不进去。因此打包时会先试完整字体，放不下就自动换成子集字体：
+```sh
+# 手机进 fastboot（关机后 音量- + 电源）
+fastboot flash recovery skyward-polaris-V12.5.1.0.QDGCNXM.img
+fastboot reboot        # 这台机器的 ABL 不认 "reboot recovery"，进系统后：
+adb reboot recovery
+```
 
-- 字重固定为 Regular；
-- 只保留 ASCII、拉丁补充、常用标点、中文标点和 GB2312 的 6763 个汉字。
+> `fastboot boot` 在小米 ABL 上不生效（会直接回正常启动），只能刷进分区。
 
-生僻字和繁体字会显示成方框。要换字符集，改 `scripts/subset-font.sh` 里的范围。
+## 回滚
 
-另外，原厂 recovery 的 `res/images/`（8.3 MiB 界面图片）在打包时会被丢掉：
-Skyward 自己画界面，这 8 MiB 是白占的。
+```sh
+fastboot flash recovery offox-polaris.img     # polaris-base release 里那份
+fastboot reboot
+```
 
-## CI
+## 为什么还不做这些
 
-`.github/workflows/build.yml` 在每次 push 时跑 clippy、测试，并用 NDK 编译设备端
-二进制，证明代码对这台机器编得过。它不产出镜像：原厂 recovery 不在这台机器的
-卡刷包里，自动取不到，镜像用 `scripts/build.sh` 在本地构建。
-
-## 这个移植改了什么
-
-相对上游，为跑通 A-only 的老机器改了这些：
-
-- **boot image**：读写 header v0 / v1 / v2，按 header 的 page size 切分，
-  保留 second bootloader、DTB、DTBO，写回时重算 SHA-1 / SHA-256 digest。
-- **ramdisk**：自动识别 gzip、LZ4 legacy framing 和未压缩三种格式，按原格式压回。
-- **A-only 运行时**：新增 `Slot::None`（空后缀），`/dev/block/by-name` 回退到
-  `/dev/block/bootdevice/by-name`，fstab 回退读 `/etc/recovery.fstab`，
-  安装、备份、脚本刷机都按单分区处理，不再假设 super 和槽位。
-- **打包器**：自动识别 `system/bin/recovery` 或 `sbin/recovery`、`prop.default`
-  或 `default.prop`；原厂镜像没有 AVB footer 时用 `--partition-size` 指定分区大小；
-  打包时丢掉原厂 UI 的 `res/images/`。
-
-## 已知限制
-
-- 没有 payload OTA、fastbootd、A/B 切槽和双系统；MIX 2S 的 MIUI 用的是
-  A-only + system-as-root，没有动态分区，这些功能对它本来也不适用。
-- 尚未在真机上完整验证；SELinux 沿用原厂 cmdline 的 permissive。
-- 字体是子集，生僻字显示为方框。
+- **`/data` 解密**：这台机器跑 Android 16，密钥服务是 `keymaster@4.0` / `gatekeeper@1.0`
+  （`/vendor/lib64/hw` 里只有 `android.hardware.gatekeeper@1.0-impl-qti.so`），而 Skyward
+  的解密路径是照新机的 `keymint` / `keystore2` 写的。
+- **Wi-Fi**：要拉起 `wpa_supplicant` 与 vendor 的 `libwifi-hal`，还要让 `/vendor` 挂起来之后
+  的 `ueventd` 规则对上，这是下一步。
+- **MTP / 双系统 / fastbootd / payload OTA**：A-only、无 super，本来就不适用或要另写。
 
 ## 许可
 
-[GPL-3.0-or-later](LICENSE)。上游项目：[kirklin/skyward](https://github.com/kirklin/skyward)。
+GPL-3.0-or-later，见 `LICENSE`。上游：[kirklin/skyward](https://github.com/kirklin/skyward)。
