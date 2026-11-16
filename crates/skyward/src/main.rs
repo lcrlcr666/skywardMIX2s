@@ -757,8 +757,8 @@ fn recovery() -> Result<()> {
         let cfg = DeviceConfig::load(Path::new("/").join(ramdisk::CONFIG))?;
         // A phone whose super is kept on a partition of another name says so
         // here, and everything that maps or flashes super follows it.
-        if let Some(super) = &cfg.partitions.super {
-            skyward_vab::set_super_partition(super);
+        if let Some(super_partition) = &cfg.partitions.super_partition {
+            skyward_vab::set_super_partition(super_partition);
         }
         skyward_sys::kmsg(&format!(
             "{} {} recovery up, misc command {:?} args {:?}, asking for {:?}",

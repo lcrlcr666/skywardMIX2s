@@ -335,8 +335,8 @@ pub struct Partitions {
     /// The partition super is kept on, where the phone's dynamic partitions
     /// were made over a partition of another name: the phones of this
     /// generation keep theirs on the one called system.
-    #[serde(default)]
-    pub super: Option<String>,
+    #[serde(default, rename = "super")]
+    pub super_partition: Option<String>,
 }
 
 /// A program from the phone's own partitions that the recovery keeps
