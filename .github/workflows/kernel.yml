@@ -45,20 +45,20 @@ jobs:
 
       - name: Take the configuration the phone runs
         run: |
-          cp kernel/polaris_defconfig kernel/arch/arm64/configs/polaris_defconfig
+          cp kernel-config/polaris_defconfig ksrc/arch/arm64/configs/polaris_defconfig
           # The WLAN driver is the module this build exists for.
-          sed -i 's/^CONFIG_QCA_CLD_WLAN=y/CONFIG_QCA_CLD_WLAN=m/' kernel/arch/arm64/configs/polaris_defconfig
-          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES)=' kernel/arch/arm64/configs/polaris_defconfig || true
+          sed -i 's/^CONFIG_QCA_CLD_WLAN=y/CONFIG_QCA_CLD_WLAN=m/' ksrc/arch/arm64/configs/polaris_defconfig
+          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES)=' ksrc/arch/arm64/configs/polaris_defconfig || true
 
       - name: Configure
-        working-directory: kernel
+        working-directory: ksrc
         run: |
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 O=out $DEFCONFIG
           scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 O=out olddefconfig
 
       - name: Build
-        working-directory: kernel
+        working-directory: ksrc
         run: |
           set -o pipefail
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 O=out KCFLAGS=-Wno-error Image.gz-dtb modules 2>&1 | tail -80
@@ -66,9 +66,9 @@ jobs:
       - name: Gather what the recovery needs
         run: |
           mkdir -p kernel-out
-          cp kernel/out/arch/arm64/boot/Image.gz-dtb kernel-out/ || cp kernel/out/arch/arm64/boot/Image.gz kernel-out/
-          find kernel/out -name '*.ko' -newer kernel/Makefile -print 2>/dev/null | head -40 > kernel-out/modules.txt
-          tar -C kernel/out -cf kernel-out/modules.tar $(find kernel/out -name '*.ko' -printf '%P\n' 2>/dev/null) 2>/dev/null || true
+          cp ksrc/out/arch/arm64/boot/Image.gz-dtb kernel-out/ || cp ksrc/out/arch/arm64/boot/Image.gz kernel-out/
+          find ksrc/out -name '*.ko' -print 2>/dev/null | head -60 > kernel-out/modules.txt
+          tar -C ksrc/out -cf kernel-out/modules.tar $(find ksrc/out -name '*.ko' -printf '%P\n' 2>/dev/null) 2>/dev/null || true
           ls -l kernel-out
 
       - uses: actions/upload-artifact@v4
