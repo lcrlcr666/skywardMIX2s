@@ -49,6 +49,8 @@ jobs:
           cp kernel-config/polaris_defconfig ksrc/arch/arm64/configs/polaris_defconfig
           # The WLAN driver is the module this build exists for.
           sed -i 's/^CONFIG_QCA_CLD_WLAN=y/CONFIG_QCA_CLD_WLAN=m/' ksrc/arch/arm64/configs/polaris_defconfig
+          # The LSE atomics of this vintage do not assemble with a clang this new.
+          sed -i 's/^CONFIG_ARM64_LSE_ATOMICS=y/# CONFIG_ARM64_LSE_ATOMICS is not set/' ksrc/arch/arm64/configs/polaris_defconfig
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES)=' ksrc/arch/arm64/configs/polaris_defconfig || true
 
       - name: Configure
