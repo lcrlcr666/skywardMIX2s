@@ -33,7 +33,7 @@ jobs:
         with:
           repository: ${{ inputs.kernel_repo || 'Evolution-X-Devices/kernel_xiaomi_sdm845' }}
           ref: ${{ inputs.kernel_ref || 'vic' }}
-          path: kernel
+          path: ksrc
           fetch-depth: 1
 
       - name: Install the toolchain
