@@ -7,6 +7,9 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
+    # Notes and documents alone do not need an image built.
+    paths-ignore:
+      - "**/*.md"
   workflow_dispatch:
     inputs:
       release:
