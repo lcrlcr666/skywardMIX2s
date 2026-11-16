@@ -28,7 +28,7 @@ env:
   # full recovery userspace (Android 11 libraries) that an Android 16 system
   # can be read from, where the stock MIUI recovery's Android 10 one cannot.
   STOCK_URL: https://github.com/lcrlcr666/skywardMIX2s/releases/download/polaris-base/orange-fox-polaris.img
-  STOCK_SHA256: ""
+  STOCK_SHA256: "d2a24292f005d1f912bd5b752715ee54e32c371154500360dbb160f360d69bc0"
 
 jobs:
   build:
@@ -53,7 +53,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: stock/recovery.img
-          key: stock-${{ env.DEVICE }}-v1
+          key: base-${{ env.DEVICE }}-offox-v1
 
       - name: Take the phone's own recovery
         run: |
