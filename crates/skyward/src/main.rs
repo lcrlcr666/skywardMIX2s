@@ -839,6 +839,13 @@ fn prepare(cfg: &DeviceConfig, slot: skyward_vab::Slot) -> Result<()> {
     // A phone that is not A/B has no super: its partitions are where the
     // phone's own table says they are, and they are mounted from there.
     if !slot.is_ab() {
+        // The installed system is mounted where nothing of the recovery is
+        // shadowed: its build properties say which system is installed, and
+        // its files can be browsed. The ramdisk's own /system stays as it is.
+        match skyward_block::fstab::mount_at("system", Path::new("/mnt/system")) {
+            Ok(at) => skyward_sys::kmsg(&format!("system is mounted on {}", at.display()))?,
+            Err(e) => skyward_sys::kmsg(&format!("system is not mounted: {e:#}"))?,
+        }
         for name in &cfg.partitions.mounted {
             match skyward_block::fstab::mount(name) {
                 Ok(at) => skyward_sys::kmsg(&format!("{name} is mounted on {}", at.display()))?,

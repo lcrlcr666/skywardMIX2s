@@ -214,6 +214,10 @@ pub fn installed_props(slot: Slot) -> Result<HashMap<String, String>> {
         let mut props: HashMap<String, String> = skyward_sys::props(BOOT_PROPS).into_iter().collect();
         for path in [
             "/system/build.prop",
+            // The installed system, where a recovery whose ramdisk is /system
+            // mounts it beside itself: its properties are the ones the pages
+            // name, so they are read after the recovery's own.
+            "/mnt/system/build.prop",
             "/vendor/default.prop",
             "/vendor/build.prop",
             "/product/etc/build.prop",

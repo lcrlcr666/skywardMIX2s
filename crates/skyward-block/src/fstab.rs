@@ -119,6 +119,20 @@ pub fn device(entry: &Entry) -> Result<String> {
     anyhow::bail!("neither {path} nor {} is here", by_name.display())
 }
 
+/// Mount the partition `name` at `at`, whatever the phone's own table calls
+/// its mount point, and say where. A recovery whose ramdisk *is* /system
+/// mounts the installed system beside it, where nothing of the recovery is
+/// shadowed.
+pub fn mount_at(name: &str, at: &Path) -> Result<PathBuf> {
+    let entry = partition(name)?.with_context(|| format!("the phone's own table does not mount {name}"))?;
+    if crate::mount::is_mount_point(at)? {
+        return Ok(at.to_path_buf());
+    }
+    std::fs::create_dir_all(at).with_context(|| format!("make {}", at.display()))?;
+    crate::mount::mount(Path::new(&device(&entry)?), at, &entry.filesystem, &entry.options)?;
+    Ok(at.to_path_buf())
+}
+
 /// Mount the partition `name` where and as the phone's own table mounts
 /// it, and say where. Whatever shows there already, as what an earlier run
 /// of the recovery service mounted does, is taken as it is.

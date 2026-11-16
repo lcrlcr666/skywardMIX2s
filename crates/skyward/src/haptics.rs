@@ -367,3 +367,43 @@ mod tests {
         assert_eq!((share(&s, -1.0), share(&s, 2.0)), (0.25, 1.0), "no further than its ends");
     }
 }
+
+/// A vibration motor the kernel takes a length for, worn by the phones whose
+/// motor is driven through /sys/class/leds/vibrator: a click is a length in
+/// milliseconds rather than a waveform, so its strength is the length.
+pub struct Timed {
+    dir: PathBuf,
+}
+
+impl Timed {
+    pub fn open(dir: impl AsRef<std::path::Path>) -> Result<Timed> {
+        let dir = dir.as_ref().to_path_buf();
+        for name in ["duration", "activate"] {
+            ensure!(dir.join(name).exists(), "{} holds no {name}", dir.display());
+        }
+        Ok(Timed { dir })
+    }
+
+    /// The shortest click worth feeling, and the longest, in milliseconds.
+    const SHORTEST: f32 = 12.0;
+    const LONGEST: f32 = 32.0;
+
+    pub fn click(&mut self, position: f32) -> Result<Duration> {
+        let ms = Self::SHORTEST + (Self::LONGEST - Self::SHORTEST) * position.clamp(0.0, 1.0);
+        let held = Duration::from_millis(ms.round() as u64);
+        fs::write(self.dir.join("duration"), held.as_millis().to_string())
+            .with_context(|| format!("write {}/duration", self.dir.display()))?;
+        fs::write(self.dir.join("activate"), "1").with_context(|| format!("write {}/activate", self.dir.display()))?;
+        Ok(held)
+    }
+
+    /// The ticks of the screen going off: a short click, as this motor plays
+    /// a waveform not at all.
+    pub fn ticks(&mut self) -> Result<Duration> {
+        let held = Duration::from_millis(Self::SHORTEST as u64);
+        fs::write(self.dir.join("duration"), held.as_millis().to_string())
+            .with_context(|| format!("write {}/duration", self.dir.display()))?;
+        fs::write(self.dir.join("activate"), "1").with_context(|| format!("write {}/activate", self.dir.display()))?;
+        Ok(held)
+    }
+}

@@ -1,7 +1,7 @@
 use crate::backup;
 use crate::decrypt::{self, Decryptor};
 use crate::filework;
-use crate::haptics::Haptics;
+use crate::haptics::{Haptics, Timed};
 use crate::relabel;
 use crate::input::{monotonic_ms, Event, Inputs};
 use crate::merge;
@@ -1131,7 +1131,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     let control = Control::open().inspect_err(|e| {
         let _ = skyward_sys::kmsg(&format!("the control socket did not open: {e:#}"));
     })?;
-    let mut haptics = cfg.haptics.as_ref().map(Haptics::open).transpose()?;
+    let mut haptics = Motor::open(cfg)?;
     let mut backlight = Backlight::open().inspect_err(|e| {
         let _ = skyward_sys::kmsg(&format!("the backlight did not open: {e:#}"));
     })?;
@@ -2735,6 +2735,42 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
             };
             skyward_sys::kmsg(&format!("file transfer stops: {why:#}"))?;
             app.file_transfer_failed(false, &skyward_ui::fmt::transfer_stopped(app.state.lang, &format!("{why:#}")), now);
+        }
+    }
+}
+
+/// The vibration motor: played through the kernel's force-feedback events
+/// where its driver takes a waveform, and as a length where it takes one, as
+/// the 845's motor under /sys/class/leds/vibrator does.
+enum Motor {
+    Waveform(Haptics),
+    Timed(Timed),
+}
+
+impl Motor {
+    fn open(cfg: &DeviceConfig) -> Result<Option<Motor>> {
+        if let Some(haptics) = &cfg.haptics {
+            return Ok(Some(Motor::Waveform(Haptics::open(haptics)?)));
+        }
+        // A motor this configuration says nothing about still answers to a
+        // length, which is how the phones of this generation play a click.
+        match Timed::open("/sys/class/leds/vibrator") {
+            Ok(motor) => Ok(Some(Motor::Timed(motor))),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn click(&mut self, position: f32) -> Result<Duration> {
+        match self {
+            Motor::Waveform(motor) => motor.click(position),
+            Motor::Timed(motor) => motor.click(position),
+        }
+    }
+
+    fn ticks(&mut self) -> Result<Duration> {
+        match self {
+            Motor::Waveform(motor) => motor.ticks(),
+            Motor::Timed(motor) => motor.ticks(),
         }
     }
 }
