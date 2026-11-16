@@ -71,7 +71,11 @@ fn with_metadata<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
     if mount::is_mount_point(at)? {
         return work();
     }
-    mount::mount_ro(&Path::new(skyward_block::BY_NAME).join("metadata"), at)?;
+    // The phone's own table says where its metadata is kept: these phones
+    // keep it on the partition called logdump, not on one called metadata.
+    if skyward_block::fstab::mount_at("metadata", at).is_err() {
+        mount::mount_ro(&Path::new(skyward_block::BY_NAME).join("metadata"), at)?;
+    }
     let done = work();
     mount::umount(at)?;
     done
