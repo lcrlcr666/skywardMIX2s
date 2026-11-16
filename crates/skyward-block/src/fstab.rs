@@ -42,14 +42,30 @@ pub fn entries(text: &str) -> Vec<Entry> {
             continue;
         }
         let fields: Vec<&str> = line.split_whitespace().collect();
-        let [device, mount_point, filesystem, options, extras] = fields[..] else { continue };
-        out.push(Entry {
-            device: device.to_string(),
-            mount_point: mount_point.to_string(),
-            filesystem: filesystem.to_string(),
-            options: options.split(',').map(str::to_string).collect(),
-            extras: extras.split(',').map(str::to_string).collect(),
-        });
+        if let [device, mount_point, filesystem, options, extras] = fields[..] {
+            out.push(Entry {
+                device: device.to_string(),
+                mount_point: mount_point.to_string(),
+                filesystem: filesystem.to_string(),
+                options: options.split(',').map(str::to_string).collect(),
+                extras: extras.split(',').map(str::to_string).collect(),
+            });
+            continue;
+        }
+        // The older table a recovery keeps, and the one another recovery's
+        // ramdisk carries, names the mount point first and the device last:
+        // `mount_point filesystem device [device2]`.
+        if let [mount_point, filesystem, device, ..] = fields[..] {
+            if mount_point.starts_with('/') && device.starts_with('/') {
+                out.push(Entry {
+                    device: device.to_string(),
+                    mount_point: mount_point.to_string(),
+                    filesystem: filesystem.to_string(),
+                    options: Vec::new(),
+                    extras: Vec::new(),
+                });
+            }
+        }
     }
     out
 }

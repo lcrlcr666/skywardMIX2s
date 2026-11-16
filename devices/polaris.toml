@@ -8,9 +8,10 @@ soc = { hans = "骁龙®845移动平台", hant = "Snapdragon® 845 行動平台"
 os_version_prop = "ro.build.version.incremental"
 
 [display]
-# 5.99 inches, 18.7:9, as the panel reports itself.
+# 5.99 inches, 18.7:9; the panel reports 1080x2160 and the image is built on
+# a recovery whose own frame is 1080x2248.
 width = 1080
-height = 2248
+height = 2160
 density = 440
 diagonal = 5.99
 
@@ -19,11 +20,13 @@ diagonal = 5.99
 [modules]
 sources = ["vendor"]
 
-# The recovery runs from the ramdisk, so the system partition is free to
-# be mounted where the phone's own table puts it: its build properties say
-# which system is installed, and the file manager browses it.
+# The ramdisk IS /system here: it carries the recovery's own /system/bin,
+# /system/lib64 and the program that is running. Mounting the installed
+# system over that takes the recovery out from under itself — the shell and
+# every library under /system stop resolving — so only the vendor partition
+# is mounted, where the phone's own table and its drivers are.
 [partitions]
-mounted = ["system"]
+mounted = ["vendor"]
 
 # The baseband's settings and the sensors' calibration, as every Xiaomi
 # phone of this generation keeps them.

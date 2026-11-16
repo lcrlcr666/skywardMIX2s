@@ -1083,21 +1083,42 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     if cfg.display.density == 0 {
         return Err(anyhow!("{}: [display] density is required to lay out the UI", cfg.device.codename));
     }
-    let mut info = skyward_info::collect(cfg)?;
+    let mut info = skyward_info::collect(cfg).inspect_err(|e| {
+        let _ = skyward_sys::kmsg(&format!("the phone's details were not read: {e:#}"));
+    })?;
     let fonts = Fonts::load(font, 0, mono).inspect_err(screen_failed)?;
+    let _ = skyward_sys::kmsg("the typefaces are loaded");
     let mut surface = KmsSurface::open("/dev/dri/card0").inspect_err(screen_failed)?;
     let (w, h) = surface.size();
-    eprintln!("display {}", surface.describe());
+    let _ = skyward_sys::kmsg(&format!("the screen is up: {w}x{h}, {}", surface.describe()));
+    // What the display says of itself, so a screen that stays dark can be
+    // told from a screen that never came up.
+    match skyward_ui::surface::kms::report("/dev/dri/card0") {
+        Ok(text) => {
+            for line in text.lines().take(16) {
+                let _ = skyward_sys::kmsg(&format!("kms: {line}"));
+            }
+        }
+        Err(e) => {
+            let _ = skyward_sys::kmsg(&format!("kms not read: {e:#}"));
+        }
+    }
     let mut inputs = Inputs::open(w, h, cfg.touch.writes.clone()).inspect_err(|e| {
         let _ = skyward_sys::kmsg(&format!("no input: {e:#}"));
         let _ = skyward_sys::kmsg(&format!("input devices: {:?}", std::fs::read_dir("/dev/input").map(|d| d.filter_map(|e| e.ok().map(|e| e.file_name())).collect::<Vec<_>>())));
     })?;
+    let _ = skyward_sys::kmsg("the input devices are open");
     let started = Instant::now();
     let mut touch_known = false;
     // adbd and fastbootd ask over it to go over to fastboot and back.
-    let control = Control::open()?;
+    let control = Control::open().inspect_err(|e| {
+        let _ = skyward_sys::kmsg(&format!("the control socket did not open: {e:#}"));
+    })?;
     let mut haptics = cfg.haptics.as_ref().map(Haptics::open).transpose()?;
-    let mut backlight = Backlight::open()?;
+    let mut backlight = Backlight::open().inspect_err(|e| {
+        let _ = skyward_sys::kmsg(&format!("the backlight did not open: {e:#}"));
+    })?;
+    let _ = skyward_sys::kmsg("the backlight is open, drawing the first page");
     let first = match &request.work {
         Work::Fastboot => Screen::Fastboot,
         Work::PromptWipeData => Screen::CantStart,
