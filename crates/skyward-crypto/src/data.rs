@@ -157,11 +157,19 @@ pub fn unmap() -> Result<()> {
 
 /// Show the owner's shared storage at /sdcard; shown already, it stays.
 fn show_owner_storage() -> Result<()> {
+    let from = Path::new(SHARED_STORAGE).join(OWNER.to_string());
     let at = Path::new(SDCARD);
-    if mount::is_mount_point(at)? {
-        return Ok(());
+    if !mount::is_mount_point(at)? {
+        mount::bind(&from, at)?;
     }
-    mount::bind(&Path::new(SHARED_STORAGE).join(OWNER.to_string()), at)
+    // Android's own path for it, which the pages of an installed system and
+    // the tools ported from one expect.
+    let emulated = Path::new("/storage/emulated/0");
+    if !mount::is_mount_point(emulated)? {
+        let _ = std::fs::create_dir_all(emulated);
+        let _ = mount::bind(&from, emulated);
+    }
+    Ok(())
 }
 
 /// Close what opening the partition opened, where the recovery opened it:
@@ -651,5 +659,8 @@ pub fn open_as_it_is() -> Result<Option<Opening>> {
     if !plain {
         return Ok(None);
     }
+    // The owner's shared storage shows where the phone shows it, which is
+    // what the file pages, MTP and the screenshots all read.
+    show_owner_storage()?;
     Ok(Some(Opening { mounted: None, closed: Vec::new() }))
 }
