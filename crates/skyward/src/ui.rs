@@ -110,7 +110,11 @@ impl Backlight {
                 .parse()
                 .with_context(|| format!("parse {name}"))
         };
-        let top = normal_max(read("max_brightness")?)?;
+        let max = read("max_brightness")?;
+        // The panel's node in the device tree says what its normal maximum is;
+        // a kernel that names the panel otherwise still lights it to the
+        // backlight's own maximum when asked for all of it.
+        let top = normal_max(max).unwrap_or(max);
         let level = read("brightness")?;
         Ok(Backlight { path: dir.join("brightness"), top, level })
     }
