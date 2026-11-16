@@ -206,8 +206,8 @@ pub mod kms {
     use drm::buffer::{self, DrmFourcc, DrmModifier, PlanarBuffer};
     use drm::control::dumbbuffer::DumbBuffer;
     use drm::control::{
-        atomic, connector, framebuffer, plane, property, AtomicCommitFlags, Device as ControlDevice, Event, FbCmd2Flags, ModeTypeFlags, PlaneType,
-        ResourceHandle,
+        atomic, connector, framebuffer, plane, property, AtomicCommitFlags, Device as ControlDevice, Event, FbCmd2Flags, ModeTypeFlags,
+        PageFlipFlags, PageFlipTarget, PlaneType, ResourceHandle,
     };
     use drm::Device;
     use std::collections::HashMap;
@@ -505,6 +505,9 @@ pub mod kms {
         conn: connector::Handle,
         lp: Option<(property::Handle, u64, u64)>,
         power: Power,
+        /// The panel is driven with the legacy CRTC call and page flips, which
+        /// this display completes where an atomic mode set never comes back.
+        legacy: bool,
         /// The display came on again in the panel's preferred mode, and the
         /// panel has yet to switch to its fastest.
         slow: bool,
@@ -730,9 +733,13 @@ pub mod kms {
             }
             // The panel comes up in its preferred mode, then switches to the
             // fastest, as `to_fastest` says why.
-            let flags = if handover { AtomicCommitFlags::empty() } else { AtomicCommitFlags::ALLOW_MODESET };
-            commit(&card, req, flags).context("set the panel mode")?;
-            let fastest = if handover { None } else { (mode.vrefresh() != preferred.vrefresh()).then_some(blob) };
+            // The panel is taken over the way a recovery that comes up over the
+            // bootloader's splash does: with the legacy CRTC call. This display
+            // never completes an atomic mode set from that state.
+            let _ = &req;
+            card.set_crtc(crtc, Some(bufs[0].fb), (0, 0), &[conn.handle()], Some(mode)).context("set the panel mode")?;
+            let fastest: Option<property::Value<'static>> = None;
+            let _ = (handover, blob, preferred);
 
             let ids: Vec<u32> = planes.iter().map(|p| u32::from(p.0)).collect();
             let summary = format!(
@@ -767,6 +774,7 @@ pub mod kms {
                 conn,
                 lp,
                 power: Power::On,
+                legacy: true,
                 slow: false,
                 w,
                 h,
@@ -800,6 +808,9 @@ pub mod kms {
         /// turns off. A touch controller that follows the panel, as
         /// Xiaomi's do, rests with it either way.
         pub fn rest(&mut self) -> Result<()> {
+            if self.legacy {
+                return self.turn_off();
+            }
             if self.power != Power::On {
                 return Ok(());
             }
@@ -820,6 +831,11 @@ pub mod kms {
                 return Ok(());
             }
             self.settle()?;
+            if self.legacy {
+                self.card.set_crtc(self.crtc, None, (0, 0), &[], None).context("turn the display off")?;
+                self.power = Power::Off;
+                return Ok(());
+            }
             let mut req = atomic::AtomicModeReq::new();
             req.add_property(self.crtc, self.active, property::Value::Boolean(false));
             // Qualcomm's display driver sends no event for a commit that
@@ -901,6 +917,18 @@ pub mod kms {
                         }
                     }
                 }
+            }
+            let fb = buf.fb;
+            if self.legacy {
+                // A page flip on the CRTC the legacy call set up: the frame's
+                // buffer is handed to the display, and the flip event says when
+                // it was sent.
+                self.settle()?;
+                self.card.page_flip(self.crtc, fb, PageFlipFlags::EVENT, None).context("flip")?;
+                self.flipping = true;
+                self.power = Power::On;
+                self.back = (self.back + 1) % self.bufs.len();
+                return Ok(());
             }
             let mut req = atomic::AtomicModeReq::new();
             for &(plane, fb_prop) in &self.planes {
