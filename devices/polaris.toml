@@ -26,7 +26,7 @@ sources = ["vendor"]
 # every library under /system stop resolving — so only the vendor partition
 # is mounted, where the phone's own table and its drivers are.
 [partitions]
-mounted = ["vendor"]
+mounted = []
 
 # The baseband's settings and the sensors' calibration, as every Xiaomi
 # phone of this generation keeps them.

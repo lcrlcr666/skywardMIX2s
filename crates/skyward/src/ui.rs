@@ -1088,6 +1088,19 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     })?;
     let fonts = Fonts::load(font, 0, mono).inspect_err(screen_failed)?;
     let _ = skyward_sys::kmsg("the typefaces are loaded");
+    // What the display says of itself before anything is asked of it: whether
+    // a mode is already on the panel, which is what says whether it can be
+    // taken over rather than set.
+    match skyward_ui::surface::kms::report("/dev/dri/card0") {
+        Ok(text) => {
+            for line in text.lines().take(24) {
+                let _ = skyward_sys::kmsg(&format!("kms before: {line}"));
+            }
+        }
+        Err(e) => {
+            let _ = skyward_sys::kmsg(&format!("kms not read: {e:#}"));
+        }
+    }
     let mut surface = KmsSurface::open("/dev/dri/card0").inspect_err(screen_failed)?;
     let (w, h) = surface.size();
     let _ = skyward_sys::kmsg(&format!("the screen is up: {w}x{h}, {}", surface.describe()));
