@@ -126,12 +126,24 @@ pub fn device(entry: &Entry) -> Result<String> {
     anyhow::bail!("neither {path} nor {} is here", by_name.display())
 }
 
+/// The first entry the phone's own table mounts on `point`, by whichever
+/// partition it reaches there: this generation keeps metadata on the one
+/// called logdump, mounted on /metadata.
+pub fn by_mount_point(point: &str) -> Result<Option<Entry>> {
+    Ok(table()?.into_iter().find(|e| e.mount_point == point))
+}
+
 /// Mount the partition `name` at `at`, whatever the phone's own table calls
 /// its mount point, and say where. A recovery whose ramdisk *is* /system
 /// mounts the installed system beside it, where nothing of the recovery is
 /// shadowed.
 pub fn mount_at(name: &str, at: &Path) -> Result<PathBuf> {
-    let entry = partition(name)?.with_context(|| format!("the phone's own table does not mount {name}"))?;
+    let entry = match partition(name)? {
+        Some(entry) => entry,
+        // The table may keep the partition under another name and mount it
+        // where the recovery wants it: metadata lives on logdump here.
+        None => by_mount_point(&format!("/{name}"))?.with_context(|| format!("the phone's own table does not mount {name}"))?,
+    };
     if crate::mount::is_mount_point(at)? {
         return Ok(at.to_path_buf());
     }
