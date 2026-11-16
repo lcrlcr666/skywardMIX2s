@@ -19,6 +19,7 @@ on:
 env:
   ARCH: arm64
   CROSS_COMPILE: aarch64-linux-gnu-
+  CROSS_COMPILE_ARM32: arm-linux-gnueabihf-
   DEFCONFIG: polaris_defconfig
 
 jobs:
@@ -40,7 +41,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends bc bison flex libssl-dev libelf-dev \
-            gcc-aarch64-linux-gnu clang lld llvm make zip
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf clang lld llvm make zip
           clang --version | head -2
 
       - name: Take the configuration the phone runs
