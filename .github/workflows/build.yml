@@ -20,13 +20,14 @@ permissions:
 env:
   DEVICE: polaris
   DEVICE_NAME: Xiaomi MIX 2S
-  DEVICE_OS: V12.5.1.0.QDGCNXM (Android 10)
+  DEVICE_OS: InfinityX (Android 16), kernel 4.19
   # The recovery partition takes 64 MiB, as the phone's own table gives it.
   PARTITION_SIZE: "67108864"
-  # The phone's own recovery partition of this build, taken out of the MIUI
-  # fastboot package: 58 520 910 bytes, no AVB footer, so the size above is
-  # given rather than read from it.
-  STOCK_URL: https://github.com/6ewjso6-gif/skywardMIX2s/releases/download/polaris-v1/polaris-stock-recovery.img
+  # The base this is built on: OrangeFox R11.1 for polaris, whose kernel and
+  # ramdisk are the pair that boots on this phone's firmware. It carries a
+  # full recovery userspace (Android 11 libraries) that an Android 16 system
+  # can be read from, where the stock MIUI recovery's Android 10 one cannot.
+  STOCK_URL: https://github.com/lcrlcr666/skywardMIX2s/releases/download/polaris-base/orange-fox-polaris.img
   STOCK_SHA256: ""
 
 jobs:

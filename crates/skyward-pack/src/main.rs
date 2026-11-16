@@ -115,10 +115,25 @@ fn main() -> Result<()> {
             let size = partition_size(&stock, asked.or(cfg.stock.as_ref().and_then(|s| s.partition_size)))?;
             let mut img = BootImage::read(&stock)?;
             let mut rd = Ramdisk::decode(&img.ramdisk)?;
-            // A stock recovery ramdisk has no third-party tree; refuse to build
-            // on top of another custom recovery.
-            if let Some(e) = rd.entries.iter().find(|e| e.name == "FFiles" || e.name.starts_with("twres")) {
-                anyhow::bail!("{} holds {}, which is not a stock recovery", stock.display(), e.name);
+            // A base taken from another custom recovery brings that recovery's
+            // own pages and files with it. None of them are drawn or run here,
+            // and the room they take is what Skyward's own pages need, so they
+            // go before anything else is added.
+            let mut dropped = 0usize;
+            rd.entries.retain(|e| {
+                let theirs = e.name == "FFiles"
+                    || e.name.starts_with("FFiles/")
+                    || e.name == "twres"
+                    || e.name.starts_with("twres/")
+                    || e.name == "res"
+                    || e.name.starts_with("res/");
+                if theirs {
+                    dropped += e.data.len();
+                }
+                !theirs
+            });
+            if dropped > 0 {
+                println!("left out {dropped} bytes of the base's own pages");
             }
             let read = |p: &PathBuf| std::fs::read(p).with_context(|| format!("read {}", p.display()));
             // Android 10 and later keep the recovery service in system/bin;

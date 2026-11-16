@@ -237,6 +237,17 @@ fn log_where_it_survives() -> std::path::PathBuf {
         if let Ok(at) = skyward_block::fstab::mount("cache") {
             return at.join("skyward-recovery.log");
         }
+        // A base whose table this cannot read still has the cache partition
+        // beside the others, so it is mounted by the name the phone gives it,
+        // and the lines outlive a restart anyway.
+        let cache = Path::new("/cache");
+        let _ = std::fs::create_dir_all(cache);
+        let device = Path::new(skyward_block::BY_NAME).join("cache");
+        for filesystem in ["ext4", "f2fs"] {
+            if skyward_block::mount::mount(&device, cache, filesystem, &["noatime".to_string()]).is_ok() {
+                return cache.join("skyward-recovery.log");
+            }
+        }
     }
     std::path::PathBuf::from(skyward_sys::LOG)
 }
