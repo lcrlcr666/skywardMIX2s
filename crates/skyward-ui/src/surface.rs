@@ -812,9 +812,6 @@ pub mod kms {
         /// turns off. A touch controller that follows the panel, as
         /// Xiaomi's do, rests with it either way.
         pub fn rest(&mut self) -> Result<()> {
-            if self.legacy {
-                return self.turn_off();
-            }
             if self.power != Power::On {
                 return Ok(());
             }
@@ -836,8 +833,17 @@ pub mod kms {
             }
             self.settle()?;
             if self.legacy {
-                self.card.set_crtc(self.crtc, None, (0, 0), &[], None).context("turn the display off")?;
-                self.power = Power::Off;
+                // The CRTC keeps its mode: this display does not come back
+                // from being taken down and set up again, and it was doing so
+                // a couple of times and then staying dark. Resting costs what
+                // the display processor draws while it scans out a dark
+                // frame, which is less than a screen that never returns.
+                if let Some((id, _, rest)) = self.lp {
+                    let mut req = atomic::AtomicModeReq::new();
+                    req.add_property(self.conn, id, property::Value::UnsignedRange(rest));
+                    self.card.atomic_commit(AtomicCommitFlags::empty(), req).context("rest the panel")?;
+                }
+                self.power = Power::Resting;
                 return Ok(());
             }
             let mut req = atomic::AtomicModeReq::new();
@@ -930,10 +936,18 @@ pub mod kms {
                     // frame's buffer is handed to the display, and the flip
                     // event says when it was sent.
                     self.card.page_flip(self.crtc, fb, PageFlipFlags::EVENT, None).context("flip")?;
+                } else if let Some((id, run, _)) = self.lp {
+                    // The panel was resting: it is told to run again, and this
+                    // frame is flipped onto the CRTC, which kept its mode
+                    // through the rest.
+                    let mut req = atomic::AtomicModeReq::new();
+                    req.add_property(self.conn, id, property::Value::UnsignedRange(run));
+                    self.card.atomic_commit(AtomicCommitFlags::empty(), req).context("wake the panel")?;
+                    self.card.page_flip(self.crtc, fb, PageFlipFlags::EVENT, None).context("flip")?;
                 } else {
-                    // The display was turned off, so its CRTC is set again with
-                    // the mode the panel came up in: this frame is the first it
-                    // scans out after that.
+                    // No low-power mode to come back from: the CRTC is set again
+                    // with the mode the panel came up in, and this frame is the
+                    // first it scans out after that.
                     self.card.set_crtc(self.crtc, Some(fb), (0, 0), &[self.conn], Some(self.mode)).context("turn the display on")?;
                 }
                 self.flipping = true;
