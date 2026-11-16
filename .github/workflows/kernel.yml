@@ -1,0 +1,79 @@
+name: Kernel
+
+# Builds the phone's own kernel with its WLAN driver as a module: the driver
+# built into the kernel asks for its firmware before any partition is mounted,
+# and never comes up in a recovery. As a module it is loaded after the vendor
+# partition is, which is what Android itself does.
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_repo:
+        description: "Kernel source (owner/name)"
+        required: false
+        default: "Evolution-X-Devices/kernel_xiaomi_sdm845"
+      kernel_ref:
+        description: "Branch or tag of that source"
+        required: false
+        default: "vic"
+
+env:
+  ARCH: arm64
+  CROSS_COMPILE: aarch64-linux-gnu-
+  DEFCONFIG: polaris_defconfig
+
+jobs:
+  kernel:
+    name: Build the kernel and its WLAN module
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the kernel source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.kernel_repo || 'Evolution-X-Devices/kernel_xiaomi_sdm845' }}
+          ref: ${{ inputs.kernel_ref || 'vic' }}
+          path: kernel
+          fetch-depth: 1
+
+      - name: Install the toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bc bison flex libssl-dev libelf-dev \
+            gcc-aarch64-linux-gnu clang lld llvm make zip
+          clang --version | head -2
+
+      - name: Take the configuration the phone runs
+        run: |
+          cp kernel/polaris_defconfig kernel/arch/arm64/configs/polaris_defconfig
+          # The WLAN driver is the module this build exists for.
+          sed -i 's/^CONFIG_QCA_CLD_WLAN=y/CONFIG_QCA_CLD_WLAN=m/' kernel/arch/arm64/configs/polaris_defconfig
+          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES)=' kernel/arch/arm64/configs/polaris_defconfig || true
+
+      - name: Configure
+        working-directory: kernel
+        run: |
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 O=out $DEFCONFIG
+          scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 O=out olddefconfig
+
+      - name: Build
+        working-directory: kernel
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 O=out KCFLAGS=-Wno-error Image.gz-dtb modules 2>&1 | tail -80
+
+      - name: Gather what the recovery needs
+        run: |
+          mkdir -p kernel-out
+          cp kernel/out/arch/arm64/boot/Image.gz-dtb kernel-out/ || cp kernel/out/arch/arm64/boot/Image.gz kernel-out/
+          find kernel/out -name '*.ko' -newer kernel/Makefile -print 2>/dev/null | head -40 > kernel-out/modules.txt
+          tar -C kernel/out -cf kernel-out/modules.tar $(find kernel/out -name '*.ko' -printf '%P\n' 2>/dev/null) 2>/dev/null || true
+          ls -l kernel-out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: polaris-kernel
+          path: kernel-out/
+          if-no-files-found: error
+          retention-days: 30
