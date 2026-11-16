@@ -218,6 +218,11 @@ pub fn installed_props(slot: Slot) -> Result<HashMap<String, String>> {
             // mounts it beside itself: its properties are the ones the pages
             // name, so they are read after the recovery's own.
             "/mnt/system/build.prop",
+            // The installed system of this generation is a system-as-root
+            // image: its own /system and /system_ext are directories inside
+            // the partition mounted here.
+            "/mnt/system/system/build.prop",
+            "/mnt/system/system_ext/build.prop",
             "/vendor/default.prop",
             "/vendor/build.prop",
             "/product/etc/build.prop",
