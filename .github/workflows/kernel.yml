@@ -123,12 +123,13 @@ jobs:
           mkdir -p kernel-out
           cp ksrc/out/arch/arm64/boot/Image.gz kernel-out/ || true
           cp ksrc/out/arch/arm64/boot/Image.gz-dtb kernel-out/ 2>/dev/null || true
-          # The module goes into a 64 MiB recovery beside a kernel and a
-          # ramdisk: what it carries for debugging is stripped here.
+          # The module goes into the recovery exactly as its kernel was built
+          # with it: stripping it leaves its symbol versions out of step, and
+          # the kernel refuses it with "disagrees about module_layout". The
+          # build already leaves debugging information out.
           wlan="$(find ksrc/out -name 'wlan.ko' | head -1)"
           if [ -n "$wlan" ]; then
             cp "$wlan" kernel-out/qca_cld3_wlan.ko
-            aarch64-linux-gnu-strip --strip-debug kernel-out/qca_cld3_wlan.ko || true
             ls -l kernel-out/qca_cld3_wlan.ko
           fi
           find ksrc/out -name '*.ko' -print > kernel-out/modules.txt
