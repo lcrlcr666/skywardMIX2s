@@ -105,6 +105,13 @@ def notifier_enum(text):
 patch("arch/arm64/Kconfig", masks)
 patch("include/linux/huge_mm.h", mmap_lock)
 patch("include/linux/mmu_notifier.h", notifier_enum)
+def task_field(text):
+    """Give the traced RCU the field its backported code reads."""
+    anchor = "struct task_struct {\n"
+    if "trc_reader_need_end" in text or anchor not in text:
+        return text
+    return text.replace(anchor, anchor + "\n#ifdef CONFIG_TASKS_RCU\n\tbool\t\t\t\ttrc_reader_need_end;\n#endif\n", 1)
+patch("include/linux/sched.h", task_field)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
 for extra in root.glob("arch/*/Kconfig"):
