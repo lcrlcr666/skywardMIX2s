@@ -225,3 +225,21 @@ What remains is the closed daemon, which is an Android 16 program, and this
 recovery is Android 11: it loads and prints its own netlink handshake, then
 dies before it reaches the firmware. A recovery built from an Android 16 tree
 would run it as it is.
+
+### The 4.19 tree is a mixture of kernel versions, not a buildable tree
+
+halcyonlv/kernel_xiaomi_sdm845@16.2 is the only source for this phone with
+QRTR *and* a path to remoteproc, so it was taken next. It does not compile, and
+what it fails on says why: it carries the interfaces of one kernel generation
+over the sources of another.
+
+    include/linux/huge_mm.h        mmap_sem, renamed to mmap_lock everywhere else
+    include/linux/mmu_notifier.h   a range type and event enum that nothing declares
+    kernel/rcu/tasks.h             writes a task field this struct does not have
+    mm/migrate.c                   calls the three-argument notifier the header no
+                                   longer declares
+
+The first three were patched here (\scripts/fix-kernel-tree.py\ and the build
+step that follows it); the fourth is a call-site mismatch that only a
+compatibility shim across many files would settle. Building it is a project of
+its own, and whether the result boots is a further unknown.
