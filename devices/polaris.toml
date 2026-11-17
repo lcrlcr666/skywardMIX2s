@@ -35,5 +35,16 @@ mounted = []
 [backup]
 efs = ["modemst1", "modemst2", "fsg", "fsc", "persist"]
 
+# The phone's own WLAN: the driver is the module built beside the kernel this
+# image carries and put in the ramdisk, its firmware comes from the modem
+# partition, and the phone's own wpa_supplicant joins the networks.
+[wlan]
+modules = ["/vendor/lib/modules/qca_cld3_wlan.ko"]
+interface = "wlan0"
+supplicant = "/mnt/vendor/bin/hw/wpa_supplicant"
+libraries = ["/mnt/vendor/lib64", "/mnt/vendor/lib64/hw"]
+service = "wpa_supplicant"
+probe = "http://connectivitycheck.gstatic.com/generate_204"
+
 [update]
 server = "https://update.miui.com/updates/miotaV3.php"
