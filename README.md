@@ -204,3 +204,24 @@ So the modem's protection domains are not announced in this environment at all,
 which is what Android's own init and its vendor services arrange at boot. The
 tools are in \.github/workflows/tools.yml\ and ready; what is missing is the
 boot-time integration that makes the modem enumerate its services.
+
+### Why the open path cannot be finished on this phone
+
+The open tools need kernel interfaces this phone's kernels do not have. From
+the phone's own kernel configuration:
+
+    # CONFIG_REMOTEPROC is not set
+    # CONFIG_QCOM_RMTFS_MEM is not set
+    CONFIG_QRTR=y
+
+so the open bring-up (rmtfs -> pd-mapper -> wlfwd -> /dev/wlan) has nothing to
+talk to, and pd-mapper says as much ("failed to open remoteproc class", "no pd
+maps available"). The other kernel available for this phone, the polaris 4.9
+tree, has neither 
+et/qrtr, nor drivers/remoteproc, nor mtfs_mem, so it
+cannot carry that path either.
+
+What remains is the closed daemon, which is an Android 16 program, and this
+recovery is Android 11: it loads and prints its own netlink handshake, then
+dies before it reaches the firmware. A recovery built from an Android 16 tree
+would run it as it is.
