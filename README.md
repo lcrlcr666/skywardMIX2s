@@ -120,3 +120,29 @@ fastboot reboot
 ## 许可
 
 GPL-3.0-or-later，见 `LICENSE`。上游：[kirklin/skyward](https://github.com/kirklin/skyward)。
+
+## WLAN in recovery: what was tried, and where it stops (2026-11)
+
+The kernel path was walked to the end on this device, and the results are
+worth keeping:
+
+- The recovery runs the phone's own kernel from its own partition, so any ROM
+  boots it (v27). Wi-Fi needs the qcacld driver, which OrangeFox's kernel does
+  not carry.
+- A kernel was built from \ilcb/android_kernel_xiaomi_polaris\ (4.9, the
+  polaris-specific tree) with \polaris_user_defconfig\, \CONFIG_QCA_CLD_WLAN=m\
+  and \CONFIG_MODVERSIONS=n\. It boots, drives the panel, the data partition
+  and adb, and the WLAN module loads (\wlan_hdd_state wlan major(215)
+  initialized\).
+- It is not enough: \icnss\ never boots the WLAN firmware, no \wlan\ platform
+  driver appears under \/sys/bus/platform/drivers\, and this kernel's device
+  tree registers no \wlan\/\wcnss\ entry under \/sys/bus/msm_subsys\. In an
+  installed system the bring-up is done by the vendor's QMI/HAL userspace,
+  which a recovery does not run.
+- What a next attempt needs is not another compiler setting but that bring-up:
+  either the vendor's cnss handshake in the recovery, or a device tree that
+  declares the WLAN subsystem so the PIL can load \image/wlanmdsp.mbn\.
+
+The build that got this far is kept as the \xperimental-kernel-wlan\
+release; the image is built with \.github/workflows/kernel.yml\ and
+\scripts/fix-kernel-tree.py\ in this repository.
