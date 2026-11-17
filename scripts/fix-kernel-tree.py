@@ -112,27 +112,32 @@ def task_field(text):
     return re.sub(r"(struct task_struct \{)", r"\1\n\tbool\t\t\t\ttrc_reader_need_end;", text, count=1)
 patch("include/linux/sched.h", task_field)
 def notifier_compat(text):
-    """Let the callers that pass a range's parts reach the one that takes it."""
-    if "mmu_notifier_invalidate_range_start_compat" in text:
+    """Let both call forms reach a notifier: the range, and a range's parts."""
+    if "mmu_notifier_invalidate_range_start_real" in text:
         return text
     anchor = "#define ptep_clear_flush_young_notify"
-    if anchor not in text:
+    definition = "mmu_notifier_invalidate_range_start(struct mmu_notifier_range *range)"
+    if anchor not in text or definition not in text:
         return text
+    text = text.replace(definition,
+                        "mmu_notifier_invalidate_range_start_real(struct mmu_notifier_range *range)", 1)
     shim = (
-        "/* The callers in this tree still hand over the parts of a range; the\n"
-        "   notifier they call takes the range itself. */\n"
+        "/* Half the callers hand over a range and half its three parts: both\n"
+        "   forms are given here, and the count of what is passed picks one. */\n"
         "static inline void\n"
-        "mmu_notifier_invalidate_range_start_compat(struct mm_struct *mm,\n"
-        "\t\t\t\t\t   unsigned long start, unsigned long end)\n"
+        "mmu_notifier_invalidate_range_start_3(struct mm_struct *mm,\n"
+        "\t\t\t\t      unsigned long start, unsigned long end)\n"
         "{\n"
         "\tstruct mmu_notifier_range range;\n"
         "\n"
         "\tmmu_notifier_range_init(&range, MMU_NOTIFY_UNMAP, 0, NULL, mm, start, end);\n"
-        "\tmmu_notifier_invalidate_range_start(&range);\n"
+        "\tmmu_notifier_invalidate_range_start_real(&range);\n"
         "}\n"
         "\n"
-        "#define mmu_notifier_invalidate_range_start(mm, start, end) \\\n"
-        "\tmmu_notifier_invalidate_range_start_compat(mm, start, end)\n"
+        "#define MMN_PICK(_1, _2, _3, NAME, ...) NAME\n"
+        "#define mmu_notifier_invalidate_range_start(...) \\\n"
+        "\tMMN_PICK(__VA_ARGS__, mmu_notifier_invalidate_range_start_3, \\\n"
+        "\t\t mmu_notifier_invalidate_range_start_real, )(__VA_ARGS__)\n"
         "\n"
     )
     return text.replace(anchor, shim + anchor, 1)
