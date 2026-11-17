@@ -73,6 +73,10 @@ jobs:
             sed -i '/config .*_CPU_MASK/,/^$/ s/^\tint .*/&\n\tdefault 0/' "$f"
           done
           scripts/config --file out/.config --set-val LITTLE_CPU_MASK 0 --set-val BIG_CPU_MASK 0
+          # This tree's sched.h declares cpu_util_freq twice when its windowed
+          # load tracking is on, and the build stops on the second one. A
+          # recovery does not need it.
+          scripts/config --file out/.config -d SCHED_WALT
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -6
 
