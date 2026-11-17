@@ -39,7 +39,7 @@ efs = ["modemst1", "modemst2", "fsg", "fsc", "persist"]
 # image carries and put in the ramdisk, its firmware comes from the modem
 # partition, and the phone's own wpa_supplicant joins the networks.
 [wlan]
-modules = ["/vendor/lib/modules/qca_cld3_wlan.ko"]
+modules = ["qca_cld3_wlan"]
 interface = "wlan0"
 supplicant = "/mnt/vendor/bin/hw/wpa_supplicant"
 libraries = ["/mnt/vendor/lib64", "/mnt/vendor/lib64/hw"]
