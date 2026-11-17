@@ -113,34 +113,36 @@ def task_field(text):
 patch("include/linux/sched.h", task_field)
 def notifier_compat(text):
     """Let both call forms reach a notifier: the range, and a range's parts."""
-    if "mmu_notifier_invalidate_range_start_real" in text:
-        return text
     anchor = "#define ptep_clear_flush_young_notify"
-    definition = "mmu_notifier_invalidate_range_start(struct mmu_notifier_range *range)"
-    if anchor not in text or definition not in text:
+    if anchor not in text:
         return text
-    text = text.replace(definition,
-                        "mmu_notifier_invalidate_range_start_real(struct mmu_notifier_range *range)", 1)
-    shim = (
-        "/* Half the callers hand over a range and half its three parts: both\n"
-        "   forms are given here, and the count of what is passed picks one. */\n"
-        "static inline void\n"
-        "mmu_notifier_invalidate_range_start_3(struct mm_struct *mm,\n"
-        "\t\t\t\t      unsigned long start, unsigned long end)\n"
-        "{\n"
-        "\tstruct mmu_notifier_range range;\n"
-        "\n"
-        "\tmmu_notifier_range_init(&range, MMU_NOTIFY_UNMAP, 0, NULL, mm, start, end);\n"
-        "\tmmu_notifier_invalidate_range_start_real(&range);\n"
-        "}\n"
-        "\n"
-        "#define MMN_PICK(_1, _2, _3, NAME, ...) NAME\n"
-        "#define mmu_notifier_invalidate_range_start(...) \\\n"
-        "\tMMN_PICK(__VA_ARGS__, mmu_notifier_invalidate_range_start_3, \\\n"
-        "\t\t mmu_notifier_invalidate_range_start_real, )(__VA_ARGS__)\n"
-        "\n"
-    )
-    return text.replace(anchor, shim + anchor, 1)
+    for kind in ("start", "end"):
+        name = f"mmu_notifier_invalidate_range_{kind}"
+        if f"{name}_real" in text:
+            continue
+        definition = f"{name}(struct mmu_notifier_range *range)"
+        if definition not in text:
+            continue
+        text = text.replace(definition, f"{name}_real(struct mmu_notifier_range *range)", 1)
+        shim = (
+            "/* Half the callers hand over a range and half its three parts: both\n"
+            "   forms are given here, and the count of what is passed picks one. */\n"
+            "static inline void\n"
+            f"{name}_3(struct mm_struct *mm, unsigned long start, unsigned long end)\n"
+            "{\n"
+            "\tstruct mmu_notifier_range range;\n"
+            "\n"
+            "\tmmu_notifier_range_init(&range, MMU_NOTIFY_UNMAP, 0, NULL, mm, start, end);\n"
+            f"\t{name}_real(&range);\n"
+            "}\n"
+            "\n"
+            "#define MMN_PICK(_1, _2, _3, NAME, ...) NAME\n"
+            f"#define {name}(...) \\\n"
+            f"\tMMN_PICK(__VA_ARGS__, {name}_3, {name}_real, )(__VA_ARGS__)\n"
+            "\n"
+        )
+        text = text.replace(anchor, shim + anchor, 1)
+    return text
 patch("include/linux/mmu_notifier.h", notifier_compat)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
