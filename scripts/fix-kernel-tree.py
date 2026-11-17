@@ -149,6 +149,10 @@ def maybe_mkwrite(text):
     return re.sub(r"(maybe_mkwrite\([^,]+,\s*)vma\)", r"\1vma->vm_flags)", text)
 for source in root.glob("mm/*.c"):
     patch(str(source.relative_to(root)), maybe_mkwrite)
+def try_to_unmap_null(text):
+    """The unmap walk now takes the mapping it is aimed at; none here means all."""
+    return re.sub(r"try_to_unmap\((\w+),\s*(\w+)\)", r"try_to_unmap(\1, \2, NULL)", text)
+    patch(str(source.relative_to(root)), try_to_unmap_null)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
 for extra in root.glob("arch/*/Kconfig"):
