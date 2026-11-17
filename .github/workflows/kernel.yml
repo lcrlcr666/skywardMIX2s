@@ -132,6 +132,13 @@ jobs:
             ls -l kernel-out/qca_cld3_wlan.ko
           fi
           find ksrc/out -name '*.ko' -print > kernel-out/modules.txt
+          # The device trees this kernel was configured with, for the boards
+          # of this phone: the blob a Qualcomm boot image carries after the
+          # kernel is these, one after another.
+          find ksrc/out/arch/arm64/boot/dts -name 'polaris*.dtb' -print | sort > kernel-out/dtbs.txt
+          tar -C ksrc/out/arch/arm64/boot/dts -cf kernel-out/polaris-dtbs.tar \
+            $(find ksrc/out/arch/arm64/boot/dts -name 'polaris*.dtb' -printf '%P\n' | sort) 2>/dev/null || true
+          wc -l < kernel-out/dtbs.txt
           grep -i wlan kernel-out/modules.txt || true
           ls -l kernel-out
 
