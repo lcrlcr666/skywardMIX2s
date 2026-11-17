@@ -69,17 +69,12 @@ jobs:
           # The WLAN driver is the module this build exists for; the rest stays
           # as the phone's own configuration has it, sound included.
           scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
-          # The CPU-mask symbols of this tree have no default, and every build
-          # stops to ask for them. Zero leaves each as the whole set of CPUs,
-          # which is what the tree's own help says to use.
-          for f in $(grep -rl 'config .*_CPU_MASK' --include=Kconfig .); do
-            sed -i '/config .*_CPU_MASK/,/^$/ s/^\tint .*/&\n\tdefault 0/' "$f"
-          done
+          # The tree is made buildable in place: the CPU-mask symbols get a
+          # default, and the second cpu_util_freq of sched.h is kept out of a
+          # build that has the windowed load tracking's own. Nothing of the
+          # scheduler's behaviour changes, and the tracking stays on.
+          python3 ../scripts/fix-kernel-tree.py .
           scripts/config --file out/.config --set-val LITTLE_CPU_MASK 0 --set-val BIG_CPU_MASK 0
-          # This tree's sched.h declares cpu_util_freq twice when its windowed
-          # load tracking is on, and the build stops on the second one. A
-          # recovery does not need it.
-          scripts/config --file out/.config -d SCHED_WALT -d SCHED_TUNE
           # Additions this tree carries that a recovery has no use for, and
           # that do not compile against its own older interfaces.
           for sym in WIREGUARD KSU BBG NOMOUNT TRACEFS_EXTRA; do
