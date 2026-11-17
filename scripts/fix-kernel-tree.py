@@ -12,6 +12,7 @@ Both are fixed in the tree itself, so no later configuration pass can undo
 them, and nothing about the scheduler's behaviour changes.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -71,7 +72,8 @@ def guard_freq(text):
 
 
 patch("arch/arm64/Kconfig", masks)
-patch("kernel/sched/sched.h", guard_freq)
+if os.environ.get("PATCH_SCHED") == "1":
+    patch("kernel/sched/sched.h", guard_freq)
 for extra in root.glob("arch/*/Kconfig"):
     patch(str(extra.relative_to(root)), masks)
 
