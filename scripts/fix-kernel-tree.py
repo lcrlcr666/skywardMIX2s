@@ -149,13 +149,18 @@ def maybe_mkwrite(text):
     return re.sub(r"(maybe_mkwrite\([^,]+,\s*)vma\)", r"\1vma->vm_flags)", text)
 for source in root.glob("mm/*.c"):
     patch(str(source.relative_to(root)), maybe_mkwrite)
+
 def try_to_unmap_null(text):
     """The unmap walk now takes the mapping it is aimed at; none here means all."""
     return re.sub(r"try_to_unmap\((\w+),\s*(\w+)\)", r"try_to_unmap(\1, \2, NULL)", text)
+
+for source in root.glob("mm/*.c"):
     patch(str(source.relative_to(root)), try_to_unmap_null)
+
 def bpf_sysctl(text):
     """The entry that turns BPF statistics on is left pointing at a plain handler."""
     return text.replace("bpf_stats_handler", "proc_dointvec")
+
 patch("kernel/sysctl.c", bpf_sysctl)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
