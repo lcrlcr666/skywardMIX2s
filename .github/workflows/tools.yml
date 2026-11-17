@@ -28,14 +28,17 @@ jobs:
 
       - name: Get the sources
         run: |
-          git clone --depth 1 https://github.com/linux-msm/qrtr.git qrtr
           git clone --depth 1 https://github.com/linux-msm/pd-mapper.git pd-mapper
-          echo "== qrtr"; ls qrtr qrtr/lib qrtr/src qrtr/include
+          # The QRTR library ships in the distribution's source, not in the
+          # project's own repository.
+          curl -sSL -o qrtr.tar.gz http://archive.ubuntu.com/ubuntu/pool/main/q/qrtr/qrtr_1.2.orig.tar.gz
+          tar -xzf qrtr.tar.gz
+          echo "== qrtr"; ls qrtr-1.2 qrtr-1.2/lib qrtr-1.2/include
           echo "== pd-mapper"; ls pd-mapper
 
       - name: Build
         run: |
-          mkdir -p out
+          mkdir -p out/fake
           # Static, so they run in a recovery whose own C library is older than
           # the one they were built against.
           aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/wlfwd wlfwd/wlfwd.c
@@ -43,13 +46,19 @@ jobs:
 
           # pd-mapper is what tells the modem which protection domains exist
           # and where their firmware is; without it the WLAN domain never
-          # starts and its service never appears on the name service.
+          # starts and its service never appears on the name service. Its JSON
+          # reader includes the xz header without using it, and the phone's
+          # domain files are plain, so the decompressor is stubbed out.
+          echo '/* not needed: the domain files here are plain */' > out/fake/lzma.h
+          cat > out/fake/lzma_decomp.c <<'EOF'
+          int lzma_decomp(const char *file) { (void)file; return -1; }
+          EOF
           aarch64-linux-gnu-gcc -O2 -Wall \
-            -I qrtr/include -I pd-mapper \
+            -I out/fake -I qrtr-1.2/include -I pd-mapper \
             -o out/pd-mapper \
             pd-mapper/pd-mapper.c pd-mapper/assoc.c pd-mapper/json.c \
-            pd-mapper/servreg_loc.c pd-mapper/lzma_decomp.c \
-            -lqrtr -llzma 2>&1 | head -50 || true
+            pd-mapper/servreg_loc.c out/fake/lzma_decomp.c \
+            qrtr-1.2/lib/qrtr.c qrtr-1.2/lib/qmi.c qrtr-1.2/lib/logging.c 2>&1 | head -50 || true
           ls -l out
 
       - uses: actions/upload-artifact@v4
