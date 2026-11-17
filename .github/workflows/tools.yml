@@ -23,15 +23,14 @@ jobs:
           set -e
           # Static, so it runs in a recovery whose own C library is older than
           # the one it was built against.
-          aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o wlfwd wlfwd/wlfwd.c
-          aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o pdr-restart wlfwd/pdr-restart.c || true
-          ls -l wlfwd pdr-restart || true
+          mkdir -p out
+          aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/wlfwd wlfwd/wlfwd.c
+          aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/pdr-restart wlfwd/pdr-restart.c || true
+          ls -l out
 
       - uses: actions/upload-artifact@v4
         with:
           name: wlfwd
-          path: |
-            wlfwd
-            pdr-restart
+          path: out/
           if-no-files-found: error
           retention-days: 30
