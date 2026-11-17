@@ -60,15 +60,20 @@ jobs:
 
       - name: Take the phone's own recovery
         run: |
-          if [ -s stock/recovery.img ]; then
+          if [ -s stock/recovery.img ] && { [ -z "$STOCK_SHA256" ] || echo "$STOCK_SHA256  stock/recovery.img" | sha256sum -c - > /dev/null 2>&1; }; then
             echo "the stock recovery is already here"
           else
             mkdir -p stock
-            for attempt in 1 2 3 4; do
-              if curl -sSL --retry 5 --retry-delay 3 -o stock/recovery.img "$STOCK_URL"; then
+            for attempt in 1 2 3 4 5; do
+              rm -f stock/recovery.img
+              curl -sSL --retry 5 --retry-delay 3 -o stock/recovery.img "$STOCK_URL" || true
+              if [ -z "$STOCK_SHA256" ]; then break; fi
+              # A download that arrives short or half written is fetched again:
+              # the sum is the only thing that says it is the base image.
+              if echo "$STOCK_SHA256  stock/recovery.img" | sha256sum -c - > /dev/null 2>&1; then
                 break
               fi
-              echo "the base image did not come through; trying again ($attempt)"
+              echo "the base image came through wrong; trying again ($attempt)"
               sleep 5
             done
           fi

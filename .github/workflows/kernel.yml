@@ -51,6 +51,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends bc bison flex libssl-dev libelf-dev \
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf clang lld llvm make zip
           clang --version | head -2
+          # A kernel build of this tree wants more room than the runner has left.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h / | tail -1
 
       - name: Configure for this phone
         working-directory: ksrc
@@ -88,12 +91,25 @@ jobs:
       - name: Build
         working-directory: ksrc
         run: |
-          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error Image.gz-dtb modules > build.log 2>&1 || true
+          set +e
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error Image.gz-dtb modules > build.log 2>&1
+          code=$?
+          echo "make ended with $code"
+          df -h / | tail -1
           echo '== the first errors =='
           grep -n -i -m 5 -B4 -A16 'error' build.log | head -140 || true
           echo '== the tail =='
-          tail -120 build.log
-          ! grep -q 'Error 1\|Error 2' build.log
+          tail -150 build.log
+          echo "make ended with $code"
+          test $code -eq 0
+
+      - name: Keep the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-build-log
+          path: ksrc/build.log
+          if-no-files-found: warn
 
       - name: Gather what the recovery needs
         run: |
