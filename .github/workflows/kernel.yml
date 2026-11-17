@@ -88,8 +88,14 @@ jobs:
           for sym in WIREGUARD KSU BBG NOMOUNT TRACEFS_EXTRA DEBUG_INFO DEBUG_VM DEBUG_VM_PGFLAGS KVM VHOST MODVERSIONS; do
             scripts/config --file out/.config -d "$sym" || true
           done
+          # The WLAN bring-up needs the QMI interface and the firmware service
+          # that icnss speaks over it. The phone's own configuration asks for
+          # them; the build asks again in case the asks were dropped.
+          for sym in MSM_QMI_INTERFACE ICNSS IPC_ROUTER IPC_ROUTER_SECURITY MSM_IPC_ROUTER_GLINK_XPRT MSM_GLINK MSM_SMD QCOM_SMD; do
+            scripts/config --file out/.config -e "$sym" || true
+          done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
-          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -6
+          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|MSM_QMI_INTERFACE|ICNSS|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -8
 
       - name: Build
         working-directory: ksrc
