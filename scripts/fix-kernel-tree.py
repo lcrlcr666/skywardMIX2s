@@ -33,20 +33,30 @@ def patch(path, edit):
 
 
 def masks(text):
-    """Give every *_CPU_MASK integer symbol a default of zero."""
+    """Give every *_CPU_MASK integer symbol the default this phone needs.
+
+    The masks say which cores are the little ones and which the big ones:
+    cores 0-3 are the four little ones and 4-7 the four big ones, and a build
+    that leaves both at zero hands the scheduler a topology the phone cannot
+    start with.
+    """
     lines = text.split("\n")
     out = []
     in_mask = False
+    wanted = ""
     for line in lines:
-        if re.match(r"config .*_CPU_MASK\s*$", line):
+        match = re.match(r"config (.*_CPU_MASK)\s*$", line)
+        if match:
             in_mask = True
+            wanted = match.group(1)
             out.append(line)
             continue
         if in_mask and line.startswith("config "):
             in_mask = False
         if in_mask and re.match(r"\tint ", line):
             out.append(line)
-            out.append("\tdefault 0")
+            default = {"LITTLE_CPU_MASK": "15", "BIG_CPU_MASK": "240"}.get(wanted, "0")
+            out.append(f"\tdefault {default}")
             in_mask = False
             continue
         out.append(line)
