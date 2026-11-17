@@ -58,9 +58,9 @@ jobs:
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out "${{ inputs.defconfig || 'vendor/xiaomi/mi845_defconfig' }}"
           if [ -f "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}" ]; then
             ARCH=$ARCH scripts/kconfig/merge_config.sh -m -O out out/.config "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}"
-            # The fragment brings symbols this tree wants answered before it
-            # builds; each takes what the tree gives it.
-            yes '' | make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out oldconfig > /dev/null 2>&1 || true
+            # The fragment brings a symbol no default answers, and a build
+            # stops to ask for it: the four little cores of this phone.
+            scripts/config --file out/.config --set-val LITTLE_CPU_MASK 0x0f
             make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
           fi
           # The WLAN driver is the module this build exists for; the rest stays
