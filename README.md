@@ -161,3 +161,28 @@ So the last gap is not the kernel and not the configuration: it is that this
 platform's WLAN bring-up lives in Android 16's userspace, and this recovery is
 not Android 16. A recovery built from an Android 16 tree for this phone would
 run the daemon as it is, and the kernel built here already supports it.
+
+### The Android 16 runtime can be mounted inside the recovery
+
+The vendor's daemon was taken further than expected:
+
+\\\
+mkdir -p /tmp/rt /tmp/rtm
+cd /tmp/rt && unzip /system/apex/com.android.runtime.apex apex_payload.img
+mount -t ext4 -o loop,ro /tmp/rt/apex_payload.img /tmp/rtm
+mount -t ext4 -o ro /dev/block/by-name/vendor /vendor
+mount -t vfat -o ro /dev/block/by-name/modem /vendor/firmware_mnt
+LD_LIBRARY_PATH=/tmp/rtm/lib64/bionic:/system/lib64:/vendor/lib64:/vendor/lib64/hw \\
+  /system/bin/linker64 /vendor/bin/cnss-daemon
+\\\
+
+That runs: the A16 runtime from the apex, the A16 linker and libraries from the
+installed system, the daemon and its QMI libraries from the vendor partition,
+and \image/wlanmdsp.mbn\ where the PIL looks for it. It exits at once, all the
+same — it expects the environment its own init gives it (QMI service sockets and
+properties), which a recovery does not provide.
+
+So the chain is now: kernel boots with the WLAN module loaded, the firmware is
+in place, and the vendor daemon can be started against the phone's own Android
+16 runtime. What is missing is that daemon's environment, which is the piece to
+work on next.
