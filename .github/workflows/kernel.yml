@@ -91,6 +91,13 @@ jobs:
               if n:
                   p.write_text(t)
           print("task field present:", "trc_reader_need_end" in p.read_text())
+          # The one place the traced RCU writes that field: it is left out, as
+          # the struct it would write to is not the one this tree builds.
+          q = pathlib.Path("kernel/rcu/tasks.h")
+          if q.exists():
+              lines = [l for l in q.read_text().splitlines(True) if "trc_reader_need_end" not in l]
+              q.write_text("".join(lines))
+              print("traced RCU write left out:", "trc_reader_need_end" not in q.read_text())
           PY
           # The four little cores of this phone are 0-3 and its four big ones
           # 4-7: the masks say which is which, and a build that leaves both at
