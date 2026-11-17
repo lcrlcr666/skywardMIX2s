@@ -63,9 +63,14 @@ jobs:
           # kernel belongs to another tree of sdm845, and its scheduler
           # symbols do not match this one's sources.
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out "${{ inputs.defconfig || 'vendor/xiaomi/mi845_defconfig' }}"
-          if [ -f "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}" ]; then
-            ARCH=$ARCH scripts/kconfig/merge_config.sh -m -O out out/.config "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}"
-          fi
+          # The fragments come in order, each over what the ones before set:
+          # what the whole sdm845 family shares, then what is this phone's.
+          for fragment in $(echo "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}" | tr ',' ' '); do
+            if [ -f "$fragment" ]; then
+              echo "== $fragment"
+              ARCH=$ARCH scripts/kconfig/merge_config.sh -m -O out out/.config "$fragment"
+            fi
+          done
           # The WLAN driver is the module this build exists for; the rest stays
           # as the phone's own configuration has it, sound included.
           scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
