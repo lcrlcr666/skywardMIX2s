@@ -815,6 +815,14 @@ pub mod kms {
             if self.power != Power::On {
                 return Ok(());
             }
+            if self.legacy {
+                // The touch controller of this display follows its panel, so
+                // a resting panel takes the touches with it and nothing is
+                // left to wake the phone. The frame is black and the light is
+                // out; the display keeps streaming, so the touch still
+                // reaches the pages and brings the light back.
+                return Ok(());
+            }
             let Some((id, _, rest)) = self.lp else { return self.turn_off() };
             self.settle()?;
             let mut req = atomic::AtomicModeReq::new();
@@ -838,12 +846,9 @@ pub mod kms {
                 // a couple of times and then staying dark. Resting costs what
                 // the display processor draws while it scans out a dark
                 // frame, which is less than a screen that never returns.
-                if let Some((id, _, rest)) = self.lp {
-                    let mut req = atomic::AtomicModeReq::new();
-                    req.add_property(self.conn, id, property::Value::UnsignedRange(rest));
-                    self.card.atomic_commit(AtomicCommitFlags::empty(), req).context("rest the panel")?;
-                }
-                self.power = Power::Resting;
+                // Nothing of the display is taken down: resting it takes
+                // the touches with it, and the phone cannot be woken again.
+                // The frame in its memory is already black.
                 return Ok(());
             }
             let mut req = atomic::AtomicModeReq::new();
