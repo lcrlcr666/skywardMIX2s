@@ -10,17 +10,24 @@ on:
       kernel_repo:
         description: "Kernel source (owner/name)"
         required: false
-        default: "Evolution-X-Devices/kernel_xiaomi_sdm845"
+        default: "meuira/android_kernel_xiaomi_sdm845"
       kernel_ref:
         description: "Branch or tag of that source"
         required: false
-        default: "vic"
+        default: "staging"
+      defconfig:
+        description: "Defconfig in that source"
+        required: false
+        default: "vendor/xiaomi/mi845_defconfig"
+      fragment:
+        description: "Configuration fragment for the device"
+        required: false
+        default: "vendor/xiaomi/polaris.config"
 
 env:
   ARCH: arm64
   CROSS_COMPILE: aarch64-linux-gnu-
   CROSS_COMPILE_ARM32: arm-linux-gnueabihf-
-  DEFCONFIG: polaris_defconfig
 
 jobs:
   kernel:
@@ -32,8 +39,8 @@ jobs:
       - name: Get the kernel source
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.kernel_repo || 'Evolution-X-Devices/kernel_xiaomi_sdm845' }}
-          ref: ${{ inputs.kernel_ref || 'vic' }}
+          repository: ${{ inputs.kernel_repo || 'meuira/android_kernel_xiaomi_sdm845' }}
+          ref: ${{ inputs.kernel_ref || 'staging' }}
           path: ksrc
           fetch-depth: 1
 
@@ -44,39 +51,37 @@ jobs:
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf clang lld llvm make zip
           clang --version | head -2
 
-      - name: Take the configuration the phone runs
-        run: |
-          cp kernel-config/polaris_defconfig ksrc/arch/arm64/configs/polaris_defconfig
-          # The WLAN driver is the module this build exists for.
-          sed -i 's/^CONFIG_QCA_CLD_WLAN=y/CONFIG_QCA_CLD_WLAN=m/' ksrc/arch/arm64/configs/polaris_defconfig
-          # The LSE atomics of this vintage do not assemble with a clang this new.
-          sed -i 's/^CONFIG_ARM64_LSE_ATOMICS=y/# CONFIG_ARM64_LSE_ATOMICS is not set/' ksrc/arch/arm64/configs/polaris_defconfig
-          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES)=' ksrc/arch/arm64/configs/polaris_defconfig || true
-
-      - name: Configure
+      - name: Configure for this phone
         working-directory: ksrc
         run: |
-          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out $DEFCONFIG
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out "${{ inputs.defconfig || 'vendor/xiaomi/mi845_defconfig' }}"
+          if [ -f "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}" ]; then
+            ARCH=$ARCH scripts/kconfig/merge_config.sh -m -O out out/.config "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}"
+            make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
+          fi
+          # The WLAN driver is the module this build exists for; the rest stays
+          # as the phone's own configuration has it, sound included.
           scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
+          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES)=' out/.config
 
       - name: Build
         working-directory: ksrc
         run: |
-          set -o pipefail
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error Image.gz-dtb modules > build.log 2>&1 || true
           echo '== the first errors =='
           grep -n -m 3 -B4 -A16 'error:' build.log | head -100 || true
           echo '== the tail =='
           tail -15 build.log
-          ! grep -q 'Error 1\\|Error 2' build.log
+          ! grep -q 'Error 1\|Error 2' build.log
 
       - name: Gather what the recovery needs
         run: |
           mkdir -p kernel-out
-          cp ksrc/out/arch/arm64/boot/Image.gz-dtb kernel-out/ || cp ksrc/out/arch/arm64/boot/Image.gz kernel-out/
-          find ksrc/out -name '*.ko' -print 2>/dev/null | head -60 > kernel-out/modules.txt
+          cp ksrc/out/arch/arm64/boot/Image.gz-dtb kernel-out/ 2>/dev/null || cp ksrc/out/arch/arm64/boot/Image.gz kernel-out/ || true
+          find ksrc/out -name '*.ko' -print > kernel-out/modules.txt
           tar -C ksrc/out -cf kernel-out/modules.tar $(find ksrc/out -name '*.ko' -printf '%P\n' 2>/dev/null) 2>/dev/null || true
+          grep -i wlan kernel-out/modules.txt || true
           ls -l kernel-out
 
       - uses: actions/upload-artifact@v4
