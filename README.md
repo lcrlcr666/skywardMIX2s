@@ -243,3 +243,16 @@ The first three were patched here (\scripts/fix-kernel-tree.py\ and the build
 step that follows it); the fourth is a call-site mismatch that only a
 compatibility shim across many files would settle. Building it is a project of
 its own, and whether the result boots is a further unknown.
+
+### The last attempt: the 4.19 tree needs source surgery, not a setting
+
+That tree carries two generations of the memory-notifier interface at once:
+
+    mm/migrate.c, mm/memory.c    call mmu_notifier_invalidate_range_start with a
+                                 range, and with a range's three parts
+    include/linux/mmu_notifier.h declares only the one that takes a range
+
+A plain macro for the three-part callers then breaks the one-part callers, so
+what is left is renaming the real function and dispatching on the argument
+count across the tree — source surgery with an unknown result afterwards, since
+nothing says the kernel it produces will boot.
