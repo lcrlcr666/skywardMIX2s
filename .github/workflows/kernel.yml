@@ -83,6 +83,7 @@ jobs:
           # says "not here" lets them link and fail cleanly at run time.
           cat > drivers/misc/qtee_stub.c <<'EOF'
           #include <linux/kernel.h>
+          #include <linux/errno.h>
           int qtee_shmbridge_allocate_shm(size_t nbytes, void *shm) { return -ENODEV; }
           void qtee_shmbridge_free_shm(void *shm) { }
           EOF
