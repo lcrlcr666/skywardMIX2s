@@ -55,22 +55,26 @@ jobs:
       - name: Configure for this phone
         working-directory: ksrc
         run: |
-          # The configuration the phone itself runs, taken from its own
-          # /proc/config.gz: every symbol answered, nothing left to ask.
-          cp ../kernel-config/polaris_defconfig arch/arm64/configs/polaris_defconfig
-          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out polaris_defconfig
+          # The tree's own configuration for this phone, then the polaris
+          # fragment beside it. The configuration taken from the phone's own
+          # kernel belongs to another tree of sdm845, and its scheduler
+          # symbols do not match this one's sources.
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out "${{ inputs.defconfig || 'vendor/xiaomi/mi845_defconfig' }}"
+          if [ -f "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}" ]; then
+            ARCH=$ARCH scripts/kconfig/merge_config.sh -m -O out out/.config "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}"
+          fi
           # The WLAN driver is the module this build exists for; the rest stays
           # as the phone's own configuration has it, sound included.
           scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
           # The CPU-mask symbols of this tree have no default, and every build
-          # stops to ask for them, one per run. Zero leaves each as the whole
-          # set of CPUs, which is what the tree's own help says to use.
+          # stops to ask for them. Zero leaves each as the whole set of CPUs,
+          # which is what the tree's own help says to use.
           for f in $(grep -rl 'config .*_CPU_MASK' --include=Kconfig .); do
             sed -i '/config .*_CPU_MASK/,/^$/ s/^\tint .*/&\n\tdefault 0/' "$f"
-            grep -A2 'config .*_CPU_MASK' "$f" | head -6
           done
+          scripts/config --file out/.config --set-val LITTLE_CPU_MASK 0 --set-val BIG_CPU_MASK 0
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
-          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|LITTLE_CPU_MASK)' out/.config | head -5
+          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -6
 
       - name: Build
         working-directory: ksrc
