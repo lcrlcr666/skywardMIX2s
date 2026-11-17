@@ -78,7 +78,15 @@ jobs:
           # default, and the second cpu_util_freq of sched.h is kept out of a
           # build that has the windowed load tracking's own. Nothing of the
           # scheduler's behaviour changes, and the tracking stays on.
-          python3 ../scripts/fix-kernel-tree.py .
+          python3 ../scripts/fix-kernel-tree.py .          # The secure shared-memory bridge is asked for by drivers that the
+          # tree builds without the communicator it belongs to; a stub that
+          # says "not here" lets them link and fail cleanly at run time.
+          cat > drivers/misc/qtee_stub.c <<'EOF'
+          #include <linux/kernel.h>
+          int qtee_shmbridge_allocate_shm(size_t nbytes, void *shm) { return -ENODEV; }
+          void qtee_shmbridge_free_shm(void *shm) { }
+          EOF
+          grep -q qtee_stub drivers/misc/Makefile || echo 'obj-y += qtee_stub.o' >> drivers/misc/Makefile
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
@@ -111,7 +119,7 @@ jobs:
           # The WLAN bring-up needs the QMI interface and the firmware service
           # that icnss speaks over it. The phone's own configuration asks for
           # them; the build asks again in case the asks were dropped.
-          for sym in MSM_QMI_INTERFACE ICNSS IPC_ROUTER IPC_ROUTER_SECURITY MSM_IPC_ROUTER_GLINK_XPRT MSM_GLINK MSM_SMD QCOM_SMD QRTR QRTR_SMD REMOTEPROC QCOM_RMTFS_MEM QCOM_RPROC_COMMON REGULATOR REGULATOR_FIXED_VOLTAGE QCOM_TEE TEE MFD_SPMI_PMIC QSEECOM; do
+          for sym in MSM_QMI_INTERFACE ICNSS IPC_ROUTER IPC_ROUTER_SECURITY MSM_IPC_ROUTER_GLINK_XPRT MSM_GLINK MSM_SMD QCOM_SMD QRTR QRTR_SMD REMOTEPROC QCOM_RMTFS_MEM QCOM_RPROC_COMMON REGULATOR REGULATOR_FIXED_VOLTAGE QCOM_TEE TEE MFD_SPMI_PMIC; do
             scripts/config --file out/.config -e "$sym" || true
           done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
