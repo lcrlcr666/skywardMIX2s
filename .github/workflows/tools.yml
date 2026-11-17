@@ -23,12 +23,16 @@ jobs:
       - name: Get the sources
         run: |
           git clone --depth 1 https://github.com/linux-msm/pd-mapper.git pd-mapper
+          git clone --depth 1 https://github.com/linux-msm/rmtfs.git rmtfs
+          git clone --depth 1 https://github.com/linux-msm/tqftpserv.git tqftpserv
           # The QRTR library ships in the distribution's source, not in the
           # project's own repository.
           curl -sSL -o qrtr.tar.gz http://archive.ubuntu.com/ubuntu/pool/main/q/qrtr/qrtr_1.2.orig.tar.gz
           tar -xzf qrtr.tar.gz
           echo "== qrtr"; ls qrtr-1.2 qrtr-1.2/lib qrtr-1.2/include
           echo "== pd-mapper"; ls pd-mapper
+          echo "== rmtfs"; ls rmtfs
+          echo "== tqftpserv"; ls tqftpserv
 
       - name: Build
         run: |
@@ -53,6 +57,21 @@ jobs:
             pd-mapper/pd-mapper.c pd-mapper/assoc.c pd-mapper/json.c \
             pd-mapper/servreg_loc.c out/fake/lzma_decomp.c \
             qrtr-1.2/lib/qrtr.c qrtr-1.2/lib/qmi.c qrtr-1.2/lib/logging.c 2>&1 | head -50 || true
+
+          # rmtfs hands the modem the files it asks for over shared memory, and
+          # tqftpserv serves the images it fetches over the network: the two
+          # services a protection domain needs before it can start.
+          aarch64-linux-gnu-gcc -O2 -static -Wall \
+            -I qrtr-1.2/include -I rmtfs \
+            -o out/rmtfs \
+            rmtfs/rmtfs.c rmtfs/qmi_rmtfs.c rmtfs/qmi_tlv.c rmtfs/storage.c \
+            rmtfs/sharedmem.c rmtfs/util.c rmtfs/rproc.c \
+            qrtr-1.2/lib/qrtr.c qrtr-1.2/lib/qmi.c qrtr-1.2/lib/logging.c 2>&1 | head -30 || true
+          aarch64-linux-gnu-gcc -O2 -static -Wall \
+            -I qrtr-1.2/include -I tqftpserv \
+            -o out/tqftpserv \
+            tqftpserv/*.c \
+            qrtr-1.2/lib/qrtr.c qrtr-1.2/lib/qmi.c qrtr-1.2/lib/logging.c 2>&1 | head -30 || true
           ls -l out
 
       - uses: actions/upload-artifact@v4
