@@ -146,3 +146,18 @@ worth keeping:
 The build that got this far is kept as the \xperimental-kernel-wlan\
 release; the image is built with \.github/workflows/kernel.yml\ and
 \scripts/fix-kernel-tree.py\ in this repository.
+
+### The vendor handshake was tried too
+
+The modem's userspace daemon is on the vendor partition (\/vendor/bin/cnss-daemon\,
+with \libqmi*\ beside it), and it is the piece that asks \icnss\ to boot the
+WLAN firmware. It cannot run here: it is an Android 16 binary, and this
+recovery's userspace is Android 11 — the system linker refuses it for
+\memset_explicit\ (an Android 14 and later libc symbol), and the runtime
+\/apex/com.android.runtime\ it needs is not on the system partition to mount
+by hand (apexd builds it at boot).
+
+So the last gap is not the kernel and not the configuration: it is that this
+platform's WLAN bring-up lives in Android 16's userspace, and this recovery is
+not Android 16. A recovery built from an Android 16 tree for this phone would
+run the daemon as it is, and the kernel built here already supports it.
