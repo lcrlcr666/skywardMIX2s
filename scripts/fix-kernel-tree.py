@@ -111,6 +111,32 @@ def task_field(text):
         return text
     return re.sub(r"(struct task_struct \{)", r"\1\n\tbool\t\t\t\ttrc_reader_need_end;", text, count=1)
 patch("include/linux/sched.h", task_field)
+def notifier_compat(text):
+    """Let the callers that pass a range's parts reach the one that takes it."""
+    if "mmu_notifier_invalidate_range_start_compat" in text:
+        return text
+    anchor = "#define ptep_clear_flush_young_notify"
+    if anchor not in text:
+        return text
+    shim = (
+        "/* The callers in this tree still hand over the parts of a range; the\n"
+        "   notifier they call takes the range itself. */\n"
+        "static inline void\n"
+        "mmu_notifier_invalidate_range_start_compat(struct mm_struct *mm,\n"
+        "\t\t\t\t\t   unsigned long start, unsigned long end)\n"
+        "{\n"
+        "\tstruct mmu_notifier_range range;\n"
+        "\n"
+        "\tmmu_notifier_range_init(&range, MMU_NOTIFY_UNMAP, 0, NULL, mm, start, end);\n"
+        "\tmmu_notifier_invalidate_range_start(&range);\n"
+        "}\n"
+        "\n"
+        "#define mmu_notifier_invalidate_range_start(mm, start, end) \\\n"
+        "\tmmu_notifier_invalidate_range_start_compat(mm, start, end)\n"
+        "\n"
+    )
+    return text.replace(anchor, shim + anchor, 1)
+patch("include/linux/mmu_notifier.h", notifier_compat)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
 for extra in root.glob("arch/*/Kconfig"):
