@@ -1,0 +1,37 @@
+name: Tools
+
+# Small programs the recovery needs besides its own: the userspace half of the
+# phone's WLAN firmware bring-up, which downstream icnss kernels leave to
+# userspace and Android does with its own closed daemon.
+on:
+  workflow_dispatch:
+
+jobs:
+  wlfwd:
+    name: Build the WLAN bring-up tool
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu make
+
+      - name: Build
+        run: |
+          set -e
+          # Static, so it runs in a recovery whose own C library is older than
+          # the one it was built against.
+          aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o wlfwd wlfwd/wlfwd.c
+          aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o pdr-restart wlfwd/pdr-restart.c || true
+          ls -l wlfwd pdr-restart || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wlfwd
+          path: |
+            wlfwd
+            pdr-restart
+          if-no-files-found: error
+          retention-days: 30
