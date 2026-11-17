@@ -74,7 +74,10 @@ jobs:
           # build that has the windowed load tracking's own. Nothing of the
           # scheduler's behaviour changes, and the tracking stays on.
           python3 ../scripts/fix-kernel-tree.py .
-          scripts/config --file out/.config --set-val LITTLE_CPU_MASK 0 --set-val BIG_CPU_MASK 0
+          # The four little cores of this phone are 0-3 and its four big ones
+          # 4-7: the masks say which is which, and a build that leaves both at
+          # zero hands the scheduler a topology the phone cannot start with.
+          scripts/config --file out/.config --set-val LITTLE_CPU_MASK 0x0F --set-val BIG_CPU_MASK 0xF0
           # Additions this tree carries that a recovery has no use for, and
           # that do not compile against its own older interfaces.
           for sym in WIREGUARD KSU BBG NOMOUNT TRACEFS_EXTRA DEBUG_INFO; do
