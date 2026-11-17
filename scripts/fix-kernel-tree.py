@@ -86,8 +86,25 @@ def mmap_lock(text):
     return text.replace("->mmap_sem", "->mmap_lock")
 
 
+def notifier_enum(text):
+    """Define the event type a backport left named but undeclared."""
+    if "enum mmu_notifier_event {" in text:
+        return text
+    anchor = "#ifdef CONFIG_MMU_NOTIFIER\n"
+    if anchor not in text:
+        return text
+    declaration = (
+        anchor
+        + "\n/* The range kinds a backported notifier is told about. The tree's own\n"
+        + "   range_init takes the type without using it, and nothing declares it. */\n"
+        + "enum mmu_notifier_event {\n\tMMU_NOTIFIER_RANGE_BLOCKABLE = 0,\n};\n"
+    )
+    return text.replace(anchor, declaration, 1)
+
+
 patch("arch/arm64/Kconfig", masks)
 patch("include/linux/huge_mm.h", mmap_lock)
+patch("include/linux/mmu_notifier.h", notifier_enum)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
 for extra in root.glob("arch/*/Kconfig"):
