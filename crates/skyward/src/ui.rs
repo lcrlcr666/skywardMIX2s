@@ -231,7 +231,13 @@ impl Transfer {
             // storage offered after that is never seen. The port is handed
             // over again so the computer asks with the storage in place.
             if offer {
+                // Only a port that goes through "none" and back is
+                // enumerated again: setting the config it already has would
+                // leave the computer with what it asked for the first time.
                 skyward_sys::usb::set_mtp(true);
+                if let Err(e) = skyward_sys::usb::switch(skyward_sys::usb::resting(), USB_TIMEOUT) {
+                    skyward_sys::kmsg(&format!("the port did not come back with the storage: {e:#}"))?;
+                }
             }
         }
         Ok(())
