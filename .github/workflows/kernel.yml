@@ -79,6 +79,19 @@ jobs:
           # build that has the windowed load tracking's own. Nothing of the
           # scheduler's behaviour changes, and the tracking stays on.
           python3 ../scripts/fix-kernel-tree.py .
+          # The field is added here as well, and said out loud, so a tree that
+          # did not take the patch is visible in the log rather than two builds
+          # later.
+          python3 - <<'PY'
+          import pathlib, re
+          p = pathlib.Path("include/linux/sched.h")
+          t = p.read_text()
+          if "trc_reader_need_end" not in t:
+              t, n = re.subn(r"(struct task_struct \{)", r"\1\n\tbool\t\t\t\ttrc_reader_need_end;", t, count=1)
+              if n:
+                  p.write_text(t)
+          print("task field present:", "trc_reader_need_end" in p.read_text())
+          PY
           # The four little cores of this phone are 0-3 and its four big ones
           # 4-7: the masks say which is which, and a build that leaves both at
           # zero hands the scheduler a topology the phone cannot start with.
