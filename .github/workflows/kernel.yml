@@ -55,19 +55,15 @@ jobs:
       - name: Configure for this phone
         working-directory: ksrc
         run: |
-          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out "${{ inputs.defconfig || 'vendor/xiaomi/mi845_defconfig' }}"
-          if [ -f "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}" ]; then
-            ARCH=$ARCH scripts/kconfig/merge_config.sh -m -O out out/.config "${{ inputs.fragment || 'vendor/xiaomi/polaris.config' }}"
-            # The fragment brings a symbol no default answers, and a build
-            # stops to ask for it: the four little cores of this phone.
-            scripts/config --file out/.config --set-val LITTLE_CPU_MASK 0x0f
-            make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
-          fi
+          # The configuration the phone itself runs, taken from its own
+          # /proc/config.gz: every symbol answered, nothing left to ask.
+          cp ../kernel-config/polaris_defconfig arch/arm64/configs/polaris_defconfig
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out polaris_defconfig
           # The WLAN driver is the module this build exists for; the rest stays
           # as the phone's own configuration has it, sound included.
           scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
-          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES)=' out/.config
+          grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|SND_SOC)' out/.config | head -5
 
       - name: Build
         working-directory: ksrc
