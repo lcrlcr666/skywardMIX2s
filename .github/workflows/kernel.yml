@@ -77,6 +77,11 @@ jobs:
           # load tracking is on, and the build stops on the second one. A
           # recovery does not need it.
           scripts/config --file out/.config -d SCHED_WALT -d SCHED_TUNE
+          # Additions this tree carries that a recovery has no use for, and
+          # that do not compile against its own older interfaces.
+          for sym in WIREGUARD KSU BBG NOMOUNT TRACEFS_EXTRA; do
+            scripts/config --file out/.config -d "$sym" || true
+          done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -6
 
