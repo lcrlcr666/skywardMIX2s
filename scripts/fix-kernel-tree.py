@@ -110,7 +110,7 @@ def task_field(text):
     anchor = "struct task_struct {\n"
     if "trc_reader_need_end" in text or anchor not in text:
         return text
-    return text.replace(anchor, anchor + "\n#ifdef CONFIG_TASKS_RCU\n\tbool\t\t\t\ttrc_reader_need_end;\n#endif\n", 1)
+    return text.replace(anchor, anchor + "\n\tbool\t\t\t\ttrc_reader_need_end;\n", 1)
 patch("include/linux/sched.h", task_field)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
