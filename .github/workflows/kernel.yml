@@ -63,10 +63,10 @@ jobs:
           # as the phone's own configuration has it, sound included.
           scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
           # One symbol of this tree has no default, and every build stops to
-          # ask for it: the four little cores of this phone. The default goes
-          # into the tree itself, where no later pass can drop it.
+          # ask for it. Zero leaves it as the whole set of CPUs, which is what
+          # the tree's own help says to use when unsure.
           for f in $(grep -rl 'config LITTLE_CPU_MASK' --include=Kconfig .); do
-            sed -i '/config LITTLE_CPU_MASK/,/^$/ s/^\thex .*/&\n\tdefault 0x0f/' "$f"
+            sed -i '/config LITTLE_CPU_MASK/,/^$/ s/^\tint .*/&\n\tdefault 0/' "$f"
             grep -A3 'config LITTLE_CPU_MASK' "$f" | head -5
           done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
