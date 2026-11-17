@@ -144,6 +144,11 @@ def notifier_compat(text):
         text = text.replace(anchor, shim + anchor, 1)
     return text
 patch("include/linux/mmu_notifier.h", notifier_compat)
+def maybe_mkwrite(text):
+    """Callers that hand over the mapping get its flags, which is what it wants."""
+    return re.sub(r"(maybe_mkwrite\([^,]+,\s*)vma\)", r"\1vma->vm_flags)", text)
+for source in root.glob("mm/*.c"):
+    patch(str(source.relative_to(root)), maybe_mkwrite)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
 for extra in root.glob("arch/*/Kconfig"):
