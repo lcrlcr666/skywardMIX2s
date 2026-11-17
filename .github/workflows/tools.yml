@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  wlfwd:
-    name: Build the WLAN bring-up tool
+  tools:
+    name: Build the WLAN bring-up tools
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -16,16 +16,39 @@ jobs:
       - name: Install the toolchain
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross make
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross make git ca-certificates
+          aarch64-linux-gnu-gcc --version | head -1
+
+      - name: Get the sources
+        run: |
+          git clone --depth 1 https://github.com/linux-msm/qrtr.git qrtr
+          git clone --depth 1 https://github.com/linux-msm/pd-mapper.git pd-mapper
+          ls qrtr qrtr/lib pd-mapper
 
       - name: Build
         run: |
           set -e
-          # Static, so it runs in a recovery whose own C library is older than
-          # the one it was built against.
           mkdir -p out
+          # Static, so they run in a recovery whose own C library is older than
+          # the one they were built against.
           aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/wlfwd wlfwd/wlfwd.c
           aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/pdr-restart wlfwd/pdr-restart.c || true
+
+          # pd-mapper is what tells the modem which protection domains exist
+          # and where their firmware is; without it the WLAN domain never
+          # starts and its service never appears on the name service.
+          cat > out/stub_lzma.c <<'EOF'
+          /* The phone's protection domain files are plain, so the .xz path is
+             not needed here; the tool only asks for it and moves on. */
+          int lzma_decomp(const char *file) { (void)file; return -1; }
+          EOF
+          aarch64-linux-gnu-gcc -O2 -static -Wall \
+            -I qrtr/include -I pd-mapper \
+            -o out/pd-mapper \
+            pd-mapper/pd-mapper.c pd-mapper/assoc.c pd-mapper/json.c \
+            pd-mapper/servreg_loc.c out/stub_lzma.c \
+            qrtr/lib/libqrtr.c qrtr/lib/addr.c 2>&1 | head -40 || true
           ls -l out
 
       - uses: actions/upload-artifact@v4
