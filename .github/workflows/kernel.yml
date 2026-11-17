@@ -135,7 +135,7 @@ jobs:
           # The WLAN bring-up needs the QMI interface and the firmware service
           # that icnss speaks over it. The phone's own configuration asks for
           # them; the build asks again in case the asks were dropped.
-          for sym in MSM_QMI_INTERFACE ICNSS IPC_ROUTER IPC_ROUTER_SECURITY MSM_IPC_ROUTER_GLINK_XPRT MSM_GLINK MSM_SMD QCOM_SMD QRTR QRTR_SMD REMOTEPROC QCOM_RMTFS_MEM QCOM_RPROC_COMMON REGULATOR REGULATOR_FIXED_VOLTAGE QCOM_TEE TEE MFD_SPMI_PMIC PHY_QCOM_UFS PHY_QCOM_UFS_SDM845 SCSI_UFS_DEBUG SCSI_UFS_QCOM_DEBUG; do
+          for sym in MSM_QMI_INTERFACE ICNSS IPC_ROUTER IPC_ROUTER_SECURITY MSM_IPC_ROUTER_GLINK_XPRT MSM_GLINK MSM_SMD QCOM_SMD QRTR QRTR_SMD REMOTEPROC QCOM_RMTFS_MEM QCOM_RPROC_COMMON REGULATOR REGULATOR_FIXED_VOLTAGE QCOM_TEE TEE MFD_SPMI_PMIC PHY_QCOM_UFS SCSI_UFSHCD SCSI_UFSHCD_PLATFORM SCSI_UFS_QCOM SCSI_UFS_CRYPTO; do
             scripts/config --file out/.config -e "$sym" || true
           done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
