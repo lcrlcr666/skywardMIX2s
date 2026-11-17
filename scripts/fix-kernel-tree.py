@@ -81,7 +81,13 @@ def guard_freq(text):
     return text[:head] + "\n#ifndef CONFIG_SCHED_WALT" + text[head:end] + "#endif /* !CONFIG_SCHED_WALT */\n" + text[end:]
 
 
+def mmap_lock(text):
+    """Say what this tree calls the lock: it was renamed and one file missed."""
+    return text.replace("->mmap_sem", "->mmap_lock")
+
+
 patch("arch/arm64/Kconfig", masks)
+patch("include/linux/huge_mm.h", mmap_lock)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
 for extra in root.glob("arch/*/Kconfig"):
