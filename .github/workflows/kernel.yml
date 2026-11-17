@@ -85,6 +85,7 @@ jobs:
           #include <linux/kernel.h>
           #include <linux/errno.h>
           #include <linux/types.h>
+          #include <linux/module.h>
           int qtee_shmbridge_allocate_shm(size_t nbytes, void *shm) { return -ENODEV; }
           void qtee_shmbridge_free_shm(void *shm) { }
           /* The storage debug hooks are asked for by the storage modules; the
@@ -93,6 +94,18 @@ jobs:
           int ufsdbg_add_debugfs(void *a, void *b) { return 0; }
           int ufsdbg_remove_debugfs(void *a, void *b) { return 0; }
           void ufsdbg_set_err_state(void *a, void *b, void *c) { }
+          int ufs_qcom_phy_ctrl_rx_linecfg(void *a, void *b) { return 0; }
+          bool ufs_qcom_phy_is_pcs_ready(void *a) { return true; }
+          int ufs_qcom_phy_start_serdes(void *a) { return 0; }
+          EXPORT_SYMBOL(qtee_shmbridge_allocate_shm);
+          EXPORT_SYMBOL(qtee_shmbridge_free_shm);
+          EXPORT_SYMBOL(ufsdbg_add_debugfs);
+          EXPORT_SYMBOL(ufsdbg_remove_debugfs);
+          EXPORT_SYMBOL(ufsdbg_set_err_state);
+          EXPORT_SYMBOL(ufs_qcom_dbg_add_debugfs);
+          EXPORT_SYMBOL(ufs_qcom_phy_ctrl_rx_linecfg);
+          EXPORT_SYMBOL(ufs_qcom_phy_is_pcs_ready);
+          EXPORT_SYMBOL(ufs_qcom_phy_start_serdes);
           int ufs_qcom_dbg_add_debugfs(void *a, void *b) { return 0; }
           EOF
           grep -q qtee_stub drivers/misc/Makefile || echo 'obj-y += qtee_stub.o' >> drivers/misc/Makefile
