@@ -186,3 +186,21 @@ So the chain is now: kernel boots with the WLAN module loaded, the firmware is
 in place, and the vendor daemon can be started against the phone's own Android
 16 runtime. What is missing is that daemon's environment, which is the piece to
 work on next.
+
+### The modem announces no services at all in the recovery
+
+Three open tools were built for this and run here: wlfwd (the WLFW sequence
+over QRTR), pd-mapper (which tells the modem where its protection domains
+are) and pdr-restart. With the phone's own kernel, which has QRTR and the
+WLAN driver built in, none of them can start anything:
+
+\\\
+qrtr-lookup 42   → no services        (the service registry)
+qrtr-lookup 45   → no services        (the WLAN firmware service)
+pd-mapper        → "failed to open remoteproc class", "no pd maps available"
+\\\
+
+So the modem's protection domains are not announced in this environment at all,
+which is what Android's own init and its vendor services arrange at boot. The
+tools are in \.github/workflows/tools.yml\ and ready; what is missing is the
+boot-time integration that makes the modem enumerate its services.
