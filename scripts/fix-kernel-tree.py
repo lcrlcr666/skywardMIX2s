@@ -97,7 +97,7 @@ def notifier_enum(text):
         anchor
         + "\n/* The range kinds a backported notifier is told about. The tree's own\n"
         + "   range_init takes the type without using it, and nothing declares it. */\n"
-        + "enum mmu_notifier_event {\n\tMMU_NOTIFIER_RANGE_BLOCKABLE = 0,\n};\n"
+        + "enum mmu_notifier_event {\n\tMMU_NOTIFY_UNMAP = 0,\n\tMMU_NOTIFY_CLEAR,\n\tMMU_NOTIFY_PROTECTION_VMA,\n\tMMU_NOTIFY_PROTECTION_PAGE,\n\tMMU_NOTIFY_SOFT_DIRTY,\n\tMMU_NOTIFY_RELEASE,\n};\n"
     )
     return text.replace(anchor, declaration, 1)
 
