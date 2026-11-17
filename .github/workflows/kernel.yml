@@ -62,9 +62,13 @@ jobs:
           # The WLAN driver is the module this build exists for; the rest stays
           # as the phone's own configuration has it, sound included.
           scripts/config --file out/.config -m QCA_CLD_WLAN -e MODULES -e MODULE_UNLOAD
-          # One symbol of this tree has no default, so every build stops to ask
-          # for it; the four little cores of this phone answer it here.
-          grep -q '^CONFIG_LITTLE_CPU_MASK=' out/.config || echo 'CONFIG_LITTLE_CPU_MASK=0x0f' >> out/.config
+          # One symbol of this tree has no default, and every build stops to
+          # ask for it: the four little cores of this phone. The default goes
+          # into the tree itself, where no later pass can drop it.
+          for f in $(grep -rl 'config LITTLE_CPU_MASK' --include=Kconfig .); do
+            sed -i '/config LITTLE_CPU_MASK/,/^$/ s/^\thex .*/&\n\tdefault 0x0f/' "$f"
+            grep -A3 'config LITTLE_CPU_MASK' "$f" | head -5
+          done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|LITTLE_CPU_MASK)' out/.config | head -5
 
