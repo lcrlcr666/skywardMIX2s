@@ -85,7 +85,7 @@ jobs:
           scripts/config --file out/.config --set-val LITTLE_CPU_MASK 15 --set-val BIG_CPU_MASK 240
           # Additions this tree carries that a recovery has no use for, and
           # that do not compile against its own older interfaces.
-          for sym in WIREGUARD KSU BBG NOMOUNT TRACEFS_EXTRA DEBUG_INFO DEBUG_VM DEBUG_VM_PGFLAGS KVM VHOST MODVERSIONS; do
+          for sym in WIREGUARD KSU BBG NOMOUNT TRACEFS_EXTRA DEBUG_INFO DEBUG_VM DEBUG_VM_PGFLAGS KVM VHOST MODVERSIONS BPF BPF_SYSCALL BPF_JIT DEBUG_INFO_BTF; do
             scripts/config --file out/.config -d "$sym" || true
           done
           # The WLAN bring-up needs the QMI interface and the firmware service
