@@ -47,7 +47,7 @@ jobs:
           cat > out/fake/lzma_decomp.c <<'EOF'
           int lzma_decomp(const char *file) { (void)file; return -1; }
           EOF
-          aarch64-linux-gnu-gcc -O2 -Wall \
+          aarch64-linux-gnu-gcc -O2 -static -Wall \
             -I out/fake -I qrtr-1.2/include -I pd-mapper \
             -o out/pd-mapper \
             pd-mapper/pd-mapper.c pd-mapper/assoc.c pd-mapper/json.c \
