@@ -1180,7 +1180,11 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     app.set_asked(asked(&request));
     // Opening the data partition, or a user's own files in it, under way,
     // and the users whose own files are still closed once it is open.
-    let mut decryptor: Option<Decryptor> = None;
+    // The data partition is opened as the recovery starts, not when a page
+    // asks for it: the files the pages and the file transfer over USB show
+    // are then there from the first frame. A phone whose files need a key is
+    // still asked for it at its own page.
+    let mut decryptor: Option<Decryptor> = Some(Decryptor::start(decrypt::Job::Open)?);
     let mut closed: Vec<Closed> = Vec::new();
     let mut arriving = Some(Incoming::Arrived);
     // The mount page shows the partitions as they are when it opens and
