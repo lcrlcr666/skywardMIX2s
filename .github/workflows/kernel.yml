@@ -64,7 +64,12 @@ jobs:
         working-directory: ksrc
         run: |
           set -o pipefail
-          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error Image.gz-dtb modules 2>&1 | tail -80
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error Image.gz-dtb modules > build.log 2>&1 || true
+          echo '== the first errors =='
+          grep -n -m 3 -B4 -A16 'error:' build.log | head -100 || true
+          echo '== the tail =='
+          tail -15 build.log
+          ! grep -q 'Error 1\\|Error 2' build.log
 
       - name: Gather what the recovery needs
         run: |
