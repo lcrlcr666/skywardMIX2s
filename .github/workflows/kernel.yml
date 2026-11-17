@@ -92,7 +92,7 @@ jobs:
         working-directory: ksrc
         run: |
           set +e
-          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error Image.gz-dtb modules > build.log 2>&1
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error Image.gz modules > build.log 2>&1
           code=$?
           echo "make ended with $code"
           df -h / | tail -1
@@ -114,7 +114,8 @@ jobs:
       - name: Gather what the recovery needs
         run: |
           mkdir -p kernel-out
-          cp ksrc/out/arch/arm64/boot/Image.gz-dtb kernel-out/ 2>/dev/null || cp ksrc/out/arch/arm64/boot/Image.gz kernel-out/ || true
+          cp ksrc/out/arch/arm64/boot/Image.gz kernel-out/ || true
+          cp ksrc/out/arch/arm64/boot/Image.gz-dtb kernel-out/ 2>/dev/null || true
           find ksrc/out -name '*.ko' -print > kernel-out/modules.txt
           tar -C ksrc/out -cf kernel-out/modules.tar $(find ksrc/out -name '*.ko' -printf '%P\n' 2>/dev/null) 2>/dev/null || true
           grep -i wlan kernel-out/modules.txt || true
