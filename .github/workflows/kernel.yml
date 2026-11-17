@@ -43,6 +43,7 @@ jobs:
           ref: ${{ inputs.kernel_ref || 'staging' }}
           path: ksrc
           fetch-depth: 1
+          submodules: recursive
 
       - name: Install the toolchain
         run: |
