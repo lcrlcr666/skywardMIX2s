@@ -227,6 +227,12 @@ impl Transfer {
             let storage = offer.then(|| skyward_mtp::Storage { top: PathBuf::from(skyward_crypto::data::SDCARD), description });
             self.service.offer(storage)?;
             self.offered = offer;
+            // A computer asks what a device holds once, as it is enumerated:
+            // storage offered after that is never seen. The port is handed
+            // over again so the computer asks with the storage in place.
+            if offer {
+                skyward_sys::usb::set_mtp(true);
+            }
         }
         Ok(())
     }
