@@ -162,6 +162,10 @@ def bpf_sysctl(text):
     return text.replace("bpf_stats_handler", "proc_dointvec")
 
 patch("kernel/sysctl.c", bpf_sysctl)
+def bare_elif(text):
+    """A conditional left without its condition means the branch below it."""
+    return re.sub(r"(?m)^#elif\s*$", "#else", text)
+patch("kernel/taskstats.c", bare_elif)
 if os.environ.get("PATCH_SCHED") == "1":
     patch("kernel/sched/sched.h", guard_freq)
 for extra in root.glob("arch/*/Kconfig"):
