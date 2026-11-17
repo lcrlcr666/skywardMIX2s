@@ -107,7 +107,6 @@ jobs:
           EXPORT_SYMBOL(ufs_qcom_phy_ctrl_rx_linecfg);
           EXPORT_SYMBOL(ufs_qcom_phy_is_pcs_ready);
           EXPORT_SYMBOL(ufs_qcom_phy_start_serdes);
-          int ufs_qcom_dbg_add_debugfs(void *a, void *b) { return 0; }
           EOF
           grep -q qtee_stub drivers/misc/Makefile || echo 'obj-y += qtee_stub.o' >> drivers/misc/Makefile
           # The field is added here as well, and said out loud, so a tree that
