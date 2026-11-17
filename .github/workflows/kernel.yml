@@ -77,7 +77,7 @@ jobs:
           scripts/config --file out/.config --set-val LITTLE_CPU_MASK 0 --set-val BIG_CPU_MASK 0
           # Additions this tree carries that a recovery has no use for, and
           # that do not compile against its own older interfaces.
-          for sym in WIREGUARD KSU BBG NOMOUNT TRACEFS_EXTRA; do
+          for sym in WIREGUARD KSU BBG NOMOUNT TRACEFS_EXTRA DEBUG_INFO; do
             scripts/config --file out/.config -d "$sym" || true
           done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
@@ -111,8 +111,15 @@ jobs:
           mkdir -p kernel-out
           cp ksrc/out/arch/arm64/boot/Image.gz kernel-out/ || true
           cp ksrc/out/arch/arm64/boot/Image.gz-dtb kernel-out/ 2>/dev/null || true
+          # The module goes into a 64 MiB recovery beside a kernel and a
+          # ramdisk: what it carries for debugging is stripped here.
+          wlan="$(find ksrc/out -name 'wlan.ko' | head -1)"
+          if [ -n "$wlan" ]; then
+            cp "$wlan" kernel-out/qca_cld3_wlan.ko
+            aarch64-linux-gnu-strip --strip-debug kernel-out/qca_cld3_wlan.ko || true
+            ls -l kernel-out/qca_cld3_wlan.ko
+          fi
           find ksrc/out -name '*.ko' -print > kernel-out/modules.txt
-          tar -C ksrc/out -cf kernel-out/modules.tar $(find ksrc/out -name '*.ko' -printf '%P\n' 2>/dev/null) 2>/dev/null || true
           grep -i wlan kernel-out/modules.txt || true
           ls -l kernel-out
 
