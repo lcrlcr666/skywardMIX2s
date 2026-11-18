@@ -82,7 +82,7 @@ jobs:
           # The audio and camera techpacks are a second kernel generation's code
           # inside this one and do not compile; they are taken out of the tree,
           # which is what the techpack build file reads to know what to build.
-          rm -rf techpack/audio techpack/camera-sdm845 techpack/display
+          rm -rf techpack/audio techpack/camera-sdm845 techpack/display/rotator
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
