@@ -33,6 +33,47 @@ jobs:
           echo "== pd-mapper"; ls pd-mapper
           echo "== rmtfs"; ls rmtfs
           echo "== tqftpserv"; ls tqftpserv
+          # On this phone there is no remote processor class for the mapper to
+          # read map names from, so it reads the domain files straight out of
+          # the firmware directory instead.
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("pd-mapper/pd-mapper.c")
+          t = p.read_text()
+          old = '''\tclass_fd = open("/sys/class/remoteproc", O_RDONLY | O_DIRECTORY);
+          \tif (class_fd < 0) {
+          \t\twarn("failed to open remoteproc class");
+          \t\treturn -1;
+          \t}
+          '''
+          new = '''\tclass_fd = open("/sys/class/remoteproc", O_RDONLY | O_DIRECTORY);
+          \tif (class_fd < 0) {
+          \t\tDIR *local = opendir("/vendor/firmware_mnt/image");
+          \t\tstruct dirent *entry;
+          \t\tif (!local) {
+          \t\t\twarn("failed to open remoteproc class");
+          \t\t\treturn -1;
+          \t\t}
+          \t\twhile ((entry = readdir(local)) != NULL) {
+          \t\t\tsize_t l = strlen(entry->d_name);
+          \t\t\tif (l < 5 || strcmp(entry->d_name + l - 4, ".jsn"))
+          \t\t\t\tcontinue;
+          \t\t\tif (strlen("/vendor/firmware_mnt/image") + 1 + l + 1 > sizeof(json_path))
+          \t\t\t\tcontinue;
+          \t\t\tstrcpy(json_path, "/vendor/firmware_mnt/image/");
+          \t\t\tstrcat(json_path, entry->d_name);
+          \t\t\tassoc_set(json_set, json_path, NULL);
+          \t\t}
+          \t\tclosedir(local);
+          \t\treturn 0;
+          \t}
+          '''
+          if old in t:
+              p.write_text(t.replace(old, new, 1))
+              print("mapper reads the firmware directory directly")
+          else:
+              print("mapper patch did not match")
+          PY
 
       - name: Build
         run: |
