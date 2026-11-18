@@ -78,7 +78,9 @@ jobs:
           # default, and the second cpu_util_freq of sched.h is kept out of a
           # build that has the windowed load tracking's own. Nothing of the
           # scheduler's behaviour changes, and the tracking stays on.
-          python3 ../scripts/fix-kernel-tree.py .          # The secure shared-memory bridge is asked for by drivers that the
+          python3 ../scripts/fix-kernel-tree.py .          # The audio techpack is a second kernel generation's code inside this
+          # one and does not compile; it is left out of the build entirely.
+          [ -f techpack/Makefile ] && sed -i '/audio/d' techpack/Makefile || true          # The secure shared-memory bridge is asked for by drivers that the
           # tree builds without the communicator it belongs to; a stub that
           # says "not here" lets them link and fail cleanly at run time.
           cat > drivers/misc/qtee_stub.c <<'EOF'
