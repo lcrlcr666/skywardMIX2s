@@ -82,7 +82,7 @@ jobs:
           # The audio techpack is a second kernel generation's code inside this
           # one and does not compile; it is left out of the build entirely.
           [ -f techpack/Makefile ] && sed -i '/audio/d' techpack/Makefile || true
-          [ -f techpack/audio/asoc/codecs/wcd-mbhc-v2.c ] && sed -i 's/jack->input_dev/NULL/g' techpack/audio/asoc/codecs/wcd-mbhc-v2.c || true
+          [ -f techpack/audio/asoc/codecs/wcd-mbhc-v2.c ] && sed -i -e 's/&jack->input_dev/NULL/g' -e 's/jack->input_dev/NULL/g' techpack/audio/asoc/codecs/wcd-mbhc-v2.c || true
           # The secure shared-memory bridge is asked for by drivers that the
           # tree builds without the communicator it belongs to; a stub that
           # says "not here" lets them link and fail cleanly at run time.
