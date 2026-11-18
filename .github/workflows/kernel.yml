@@ -82,7 +82,6 @@ jobs:
           # The audio techpack is a second kernel generation's code inside this
           # one and does not compile; it is left out of the build entirely.
           [ -f techpack/Makefile ] && sed -i '/audio/d' techpack/Makefile || true
-          [ -f techpack/audio/asoc/codecs/wcd-mbhc-v2.c ] && sed -i -e 's/&jack->input_dev/NULL/g' -e 's/jack->input_dev/NULL/g' techpack/audio/asoc/codecs/wcd-mbhc-v2.c || true
           # The secure shared-memory bridge is asked for by drivers that the
           # tree builds without the communicator it belongs to; a stub that
           # says "not here" lets them link and fail cleanly at run time.
@@ -129,7 +128,7 @@ jobs:
           # The WLAN bring-up needs the QMI interface and the firmware service
           # that icnss speaks over it. The phone's own configuration asks for
           # them; the build asks again in case the asks were dropped.
-          for sym in MSM_QMI_INTERFACE ICNSS IPC_ROUTER IPC_ROUTER_SECURITY MSM_IPC_ROUTER_GLINK_XPRT MSM_GLINK MSM_SMD QCOM_SMD QRTR QRTR_SMD REMOTEPROC QCOM_RMTFS_MEM QCOM_RPROC_COMMON REGULATOR REGULATOR_FIXED_VOLTAGE QCOM_TEE TEE MFD_SPMI_PMIC PHY_QCOM_UFS SCSI_UFSHCD SCSI_UFSHCD_PLATFORM SCSI_UFS_QCOM SCSI_UFS_CRYPTO; do
+          for sym in MSM_QMI_INTERFACE ICNSS IPC_ROUTER IPC_ROUTER_SECURITY MSM_IPC_ROUTER_GLINK_XPRT MSM_GLINK MSM_SMD QCOM_SMD QRTR QRTR_SMD REMOTEPROC QCOM_RMTFS_MEM QCOM_RPROC_COMMON REGULATOR REGULATOR_FIXED_VOLTAGE QCOM_TEE TEE MFD_SPMI_PMIC PHY_QCOM_UFS SCSI_UFSHCD SCSI_UFSHCD_PLATFORM SCSI_UFS_QCOM SCSI_UFS_CRYPTO SND_JACK_INPUT_DEV; do
             scripts/config --file out/.config -e "$sym" || true
           done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
