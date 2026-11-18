@@ -83,20 +83,6 @@ jobs:
           # inside this one and do not compile; they are taken out of the tree,
           # which is what the techpack build file reads to know what to build.
           rm -rf techpack/audio techpack/camera-sdm845 techpack/display
-          # The secure shared-memory bridge is asked for by drivers that the
-          # tree builds without the communicator it belongs to; a stub that
-          # says "not here" lets them link and fail cleanly at run time.
-          cat > drivers/misc/qtee_stub.c <<'EOF'
-          #include <linux/kernel.h>
-          #include <linux/errno.h>
-          #include <linux/types.h>
-          #include <linux/module.h>
-          int qtee_shmbridge_allocate_shm(size_t nbytes, void *shm) { return -ENODEV; }
-          void qtee_shmbridge_free_shm(void *shm) { }
-          EXPORT_SYMBOL(qtee_shmbridge_allocate_shm);
-          EXPORT_SYMBOL(qtee_shmbridge_free_shm);
-          EOF
-          grep -q qtee_stub drivers/misc/Makefile || echo 'obj-y += qtee_stub.o' >> drivers/misc/Makefile
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
