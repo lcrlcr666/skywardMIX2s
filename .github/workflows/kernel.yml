@@ -138,11 +138,11 @@ jobs:
         working-directory: ksrc
         run: |
           set +e
-          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error Image.gz modules > build.log 2>&1
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS="-Wno-error -DCONFIG_SND_JACK_INPUT_DEV" Image.gz modules > build.log 2>&1
           code=$?
           # The device trees this kernel is meant to run with: another board's
           # failing one does not stop the build, and what came out is kept.
-          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS=-Wno-error dtbs >> build.log 2>&1
+          make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out KCFLAGS="-Wno-error -DCONFIG_SND_JACK_INPUT_DEV" dtbs >> build.log 2>&1
           echo "dtbs ended with $?"
           echo "make ended with $code"
           df -h / | tail -1
