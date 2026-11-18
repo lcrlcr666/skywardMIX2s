@@ -74,6 +74,20 @@ jobs:
           else:
               print("mapper patch did not match")
           PY
+          # Say which map file was tried and why it failed, so a silent zero
+          # can be told apart from a parse failure.
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("pd-mapper/pd-mapper.c")
+          t = p.read_text()
+          old = "\tret = pd_load_map(jsn);\n\t\tif (ret < 0)\n\t\t\tbreak;"
+          new = "\tfprintf(stderr, \"loading map %s\\n\", jsn);\n\t\tret = pd_load_map(jsn);\n\t\tif (ret < 0) {\n\t\t\tfprintf(stderr, \"map %s failed: %d\\n\", jsn, ret);\n\t\t\tbreak;\n\t\t}"
+          if old in t:
+              p.write_text(t.replace(old, new, 1))
+              print("map loading is now reported")
+          else:
+              print("map report patch did not match")
+          PY
 
       - name: Build
         run: |
