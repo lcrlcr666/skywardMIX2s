@@ -95,6 +95,39 @@ jobs:
           # Static, so they run in a recovery whose own C library is older than
           # the one they were built against.
           aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/wlfwd wlfwd/wlfwd.c
+          # The modem is started by opening its node and keeping it open; the
+          # node refuses to open while the subsystem is still going down, so the
+          # open is retried until the state settles.
+          cat > out/modemhold.c <<'EOF'
+          #include <fcntl.h>
+          #include <stdio.h>
+          #include <string.h>
+          #include <unistd.h>
+          int main(void)
+          {
+          	const char *state_path = "/sys/bus/msm_subsys/devices/subsys0/state";
+          	const char *node = "/dev/subsys_modem";
+          	char state[32];
+          	int fd, tries;
+          	for (tries = 0; tries < 900; tries++) {
+          		FILE *f = fopen(state_path, "r");
+          		state[0] = 0;
+          		if (f) { if (!fgets(state, sizeof(state), f)) state[0] = 0; fclose(f); }
+          		if (strncmp(state, "OFFLINE", 7) == 0) {
+          			fd = open(node, O_RDONLY);
+          			if (fd >= 0) {
+          				printf("modem opened, holding\n");
+          				fflush(stdout);
+          				for (;;) pause();
+          			}
+          		}
+          		sleep(2);
+          	}
+          	printf("gave up waiting for the modem\n");
+          	return 1;
+          }
+          EOF
+          aarch64-linux-gnu-gcc -O2 -static -Wall -o out/modemhold out/modemhold.c 2>&1 | head -10 || true
           aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/pdr-restart wlfwd/pdr-restart.c || true
 
           # pd-mapper is what tells the modem which protection domains exist
