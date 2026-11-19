@@ -272,19 +272,26 @@ int wlfw_bdf_download_send_sync(struct icnss_priv *priv)
 
 		ret = qmi_txn_init(&priv->qmi, &txn,
 				   wlfw_bdf_download_resp_msg_v01_ei, resp);
-		if (ret < 0)
+		if (ret < 0) {
+			icnss_pr_err("board data: txn init failed %d\n", ret);
 			break;
+		}
 		ret = qmi_send_request(&priv->qmi, NULL, &txn,
 				       QMI_WLFW_BDF_DOWNLOAD_REQ_V01,
 				       WLFW_BDF_DOWNLOAD_REQ_MSG_V01_MAX_MSG_LEN,
 				       wlfw_bdf_download_req_msg_v01_ei, req);
 		if (ret < 0) {
 			qmi_txn_cancel(&txn);
+			icnss_pr_err("board data: send of segment %u failed %d\n",
+				     req->seg_id, ret);
 			break;
 		}
 		ret = qmi_txn_wait(&txn, WLFW_TIMEOUT);
-		if (ret < 0)
+		if (ret < 0) {
+			icnss_pr_err("board data: segment %u got no answer %d\n",
+				     req->seg_id, ret);
 			break;
+		}
 		if (resp->resp.result != QMI_RESULT_SUCCESS_V01) {
 			/* the last segment's CRC is allowed to fail */
 			icnss_pr_err("board data segment %u rejected: result %d error %d\n",
@@ -422,6 +429,7 @@ for path, edit in ((qmi, add_function), (qmi, add_bdf_and_cal), (qmi, add_firmwa
         print(f"unchanged: {path.name}")
 
 print("changed:", ", ".join(changed) if changed else "nothing")
+
 
 
 
