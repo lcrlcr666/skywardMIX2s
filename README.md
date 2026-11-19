@@ -310,3 +310,28 @@ whole QMI stack (WDS, DMS, NAS, IPA control, ten TFTP endpoints, the remote file
 system service); in the recovery it carries only SSCTL, servreg and the DIAG
 channels.  That difference is the remaining work — see
 `docs/wlan-bring-up.md`, section "Second session".
+
+### File transfer (MTP) in the recovery
+
+Two things kept MTP from working, both in the base ramdisk rather than in
+Skyward.  `scripts/patch-mtp.py` fixes them for a packed image, and the
+effects are visible in one boot's log:
+
+    [3.9] shared-storage: /data mounted by this script
+    [4.3] skyward: mtp: the computer configured the function
+    [4.4] skyward: mtp: the computer opened a session
+    [5.1] shared-storage: /sdcard now shows /data/media/0
+    [5.3] shared-storage: shared storage: 24 entries, writable=yes
+
+1. The base's `init.recovery.usb.rc` binds the *kernel's* MTP function
+   (`mtp.gs0`) for `mtp,adb`; Skyward serves MTP over FunctionFS (`ffs.mtp`).
+   Both write the same symlink `configs/b.1/f1`, the base rule runs first and
+   its `symlink` succeeds, so Skyward's fails with the link in place and the
+   computer is left with a function nobody serves: the phone enumerates and
+   no storage ever appears.  The base rule is removed; `skyward-mtp.rc` binds
+   `ffs.mtp` once adbd and the MTP port are both ready.
+2. Nothing mounts `/data` at boot in this base (only `/cache` comes up) and
+   nothing binds `/data/media/0` onto `/sdcard`, which is what File transfer
+   offers.  `shared-storage.sh` mounts the partition (f2fs, writable) and does
+   the binding.  The files come out in the clear on this phone, so a computer
+   can read them without the credential.
