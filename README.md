@@ -665,3 +665,26 @@ at node 0 port 82), and if that works, as a few lines in `icnss_qmi.c` before
   client it already registered (icnss), so the indications cannot be observed
   from outside; what icnss's handlers see is all there is, and `FW_READY` is
   not among them.
+
+### The host can finish its whole side - and the firmware still says no (round 14)
+
+The driver is never probed, because icnss calls `icnss_call_driver_probe()`
+only from the `FW_READY` event, and the driver's probe is what sends the
+firmware its mode and configuration.  Treating a merely *connected* firmware as
+ready at driver registration breaks that wait, and it shows how far the host
+can get on its own:
+
+    icnss_qmi: Sending ini sync request, state: 0x40d87, fw_log_mode: 1
+    icnss_qmi: Sending config request, state: 0x40d87
+    icnss_qmi: fatal: QMI Config request rejected, result:1 error:90
+
+`echo ON > /dev/wlan` returns success for the first time, the driver's own
+startup runs (`hdd_wlan_startup` -> `hif_snoc_bus_configure` ->
+`icnss_wlan_enable`), the log mode and configuration requests go out - and the
+firmware refuses the configuration because it has not declared itself ready.
+The driver then fails its probe and backs out cleanly.
+
+That is the clearest statement of where this stands: the host side of the
+bring-up can now be driven end to end, and the one thing missing is the
+firmware's own readiness - which no host-side message this firmware accepts
+seems to cause.
