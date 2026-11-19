@@ -206,6 +206,14 @@ BDF_AND_CAL = r"""
  * and the name that worked is printed, since that is the part the vendor tree
  * decides from a board id this firmware reports as 0xff.
  */
+/*
+ * A full QMI_WLFW_MAX_DATA_SIZE_V01 chunk does not fit the message: the TLVs
+ * around it (valid, file_id, total_size, seg_id, end) add more than the two
+ * spare bytes the declared maximum leaves, so the encoder refuses the message
+ * with -EMSGSIZE and nothing is sent at all.  Chunks are kept well inside.
+ */
+#define BDF_CHUNK		4096
+
 static const char *const bdf_names[] = {
 	"bdwlan.bin", "bdf_d5x.bin", "bdf_e10.bin", "bdf_e5.bin", "bdwlan.b04",
 	"bdwlan.b07", "bdwlan.102", "bdwlan.104",
@@ -260,12 +268,12 @@ int wlfw_bdf_download_send_sync(struct icnss_priv *priv)
 		req->total_size_valid = 1;
 		req->total_size = fw->size;
 		req->seg_id_valid = 1;
-		req->seg_id = sent / QMI_WLFW_MAX_DATA_SIZE_V01;
+		req->seg_id = sent / BDF_CHUNK;
 		req->data_valid = 1;
 		req->end_valid = 1;
 		req->end = 0;
 		req->data_len = min_t(u32, remaining,
-				      (u32)QMI_WLFW_MAX_DATA_SIZE_V01);
+				      (u32)BDF_CHUNK);
 		if (req->data_len == remaining)
 			req->end = 1;
 		memcpy(req->data, data, req->data_len);
@@ -429,6 +437,9 @@ for path, edit in ((qmi, add_function), (qmi, add_bdf_and_cal), (qmi, add_firmwa
         print(f"unchanged: {path.name}")
 
 print("changed:", ", ".join(changed) if changed else "nothing")
+
+
+
 
 
 
