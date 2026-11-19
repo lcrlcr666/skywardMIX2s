@@ -558,3 +558,33 @@ to it, powered the WLAN chip, handed it its memory and read its capabilities -
 to the firmware's own "ready"**.  What is still missing is that last
 indication: `FW_READY` stays 0, and `wlfwd` shows the same from the outside
 (`IND_REGISTER OK, fw_status 0x5`, then `waiting up to 10 s for FW_MEM_READY`).
+
+### One bit short of ready (round 9)
+
+The modem fetches the WLAN firmware itself, through tqftpserv, and the
+transfer completes - 475 blocks, 3,648,892 bytes, the last block acknowledged:
+
+    read request for /readonly/vendor/firmware_mnt/image/wlanmdsp.mbn (rsize: 3645892)
+    ...
+    Sending 5576 bytes of DATA to 0:71
+    Sent block 475 of 5576 to 0:71
+    Got ack for 475 from 0:71
+
+and icnss's state is then one bit away from the installed system's:
+
+| | state | meaning |
+| --- | --- | --- |
+| installed system | `0xd87` | … + `FW READY` |
+| recovery | `0xd83` | FW CONN, POWER ON, SSR/PDR registered, MSA0 assigned, WLAN FW EXISTS |
+
+`0xd87 - 0xd83 = 0x4`, the ready bit.  Everything up to it is in place: the
+domain is up, the service is published, icnss connected and completed
+`ind_register`, `msa_info`, `msa_ready` and `cap` (all 1 request / 1 response),
+the regulators are on, the chip answered.  What does not come is the firmware's
+own `fw_ready` indication - the same thing `wlfwd` reports from the outside
+(`IND_REGISTER OK, fw_status 0x5`, then waiting for `FW_MEM_READY`).
+
+So the next question is narrow and answerable: what does this firmware wait for
+before it says it is ready?  The knobs to answer it are in place (`icnss.c` and
+`service-notifier.c` print at runtime, and the WLFW indication handlers are in
+`icnss_qmi`).
