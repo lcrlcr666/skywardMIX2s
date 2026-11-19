@@ -499,3 +499,27 @@ tail, the CI-built kernel composes straight onto this work's ramdisk:
     python mk-k28.py k419e/Image.gz     # k419e = the workflow's artifact
 
 and the module that goes with it is that artifact's `qca_cld3_wlan.ko`.
+
+### The IPA firmware loads now — and what that changed (round 7)
+
+The IPA driver's own entry point for its firmware is a write to `/dev/ipa`
+(`ipa3_write` → `ipa3_fw_loading_work`), not a hand-opened subsystem.  With
+`echo 1 > /dev/ipa` the driver loads it exactly as the installed system does:
+
+    ipa ipa3_uc_response_hdlr: IPA uC loaded
+    QMI_IPA_INIT_MODEM_DRIVER_REQ_V01 response received
+    ipa_fws ONLINE
+
+and the boot script now does that **before the modem is started**, which is the
+order the installed system runs in.  That brought one new piece of evidence: on
+a modem restart with IPA up, icnss received a protection-domain notification for
+the first time —
+
+    icnss: PD service notification: 0x7fffffff state: 0x4180
+
+— but with state `0x7fffffff`, which is *down* (`0x1fffffff` is what the
+installed system sees when the domain comes up), so the domain is still not
+started.  A full boot with IPA already up (k29) gives the same: IPA's handshake
+with the modem completes (`IPA received MPSS AFTER_POWERUP`,
+`QMI_IPA_INIT_MODEM_DRIVER_REQ_V01 response received`), the modem is ONLINE,
+and `qrtr-lookup 69` is still empty.
