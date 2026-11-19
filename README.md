@@ -688,3 +688,29 @@ That is the clearest statement of where this stands: the host side of the
 bring-up can now be driven end to end, and the one thing missing is the
 firmware's own readiness - which no host-side message this firmware accepts
 seems to cause.
+
+### The step this tree's driver simply does not have (round 15)
+
+Reading mainline's ath10k again, at the *indication* rather than the requests
+this time, shows what happens on `MSA_READY`:
+
+    static void ath10k_qmi_event_msa_ready(struct ath10k_qmi *qmi)
+    {
+        ath10k_qmi_fetch_board_file(qmi);        /* the board data      */
+        ath10k_qmi_bdf_dnld_send_sync(qmi);      /* QMI 0x0025          */
+        ath10k_qmi_send_cal_report_req(qmi);     /* QMI 0x0026          */
+    }
+
+Both happen **before** the firmware declares itself ready.  This tree's
+`icnss` receives the MSA-ready indication - the log says so
+(`icnss_qmi: Received MSA Ready Indication`) - and does nothing with it: no
+board data, no calibration report.  The newer vendor driver in the same tree
+(`drivers/soc/qcom/icnss2`) *does* have this, with a whole board-file naming
+scheme (`bdwlan.bin`, `bdwlan.b%02x`, `bdwlan%02x.b%02x`), and the phone's modem
+partition carries those files (`bdwlan.102` ... `bdwlan.b32`, plus
+`bdf_*.bin`).
+
+So the missing step is not a message this host sends wrongly - it is two
+messages this driver never sends at all.  They are now sent from the same place
+mainline sends them (after the capability request, before waiting), best effort,
+with the board file that loads and its name in the log.
