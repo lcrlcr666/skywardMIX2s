@@ -404,3 +404,25 @@ Tried on this round, without success:
   this recovery never does.  With `/vendor` mounted so the loader can see
   `/vendor/firmware/ipa_fws.mdt`, opening `/dev/subsys_ipa_fws` loads the image
   from `0x8c400000` and then the phone hangs and the watchdog restarts it.
+
+### What "automatic decryption" means for this phone, and for Android 8–17
+
+Measured on the phone: **its data partition is not encrypted**.  A read of
+`/data/system/packages.xml` from the recovery returns Android's plain binary
+XML (`ABX\0` …), `/data/misc/vold` does not exist, and
+`/data/media/0` holds the owner's files in the clear.  So there is nothing to
+decrypt here, and what "automatic" needs is only what is already in the boot
+script: mount the partition and bind `media/0` onto `/sdcard` — which is what
+makes File transfer show the phone's folders.
+
+For Skyward in general the picture is wider, and this phone is the easy case:
+
+| Android | Storage encryption | What a recovery needs |
+| --- | --- | --- |
+| 8, 9 | full-disk (FDE): one dm-crypt mapping for all of `/data` | the key from `vold`/`cryptfs`, unwrapped through keymaster 1.0/3.0, then a plain dm-crypt mount |
+| 10, 11 | file-based (FBE) with keymaster 3.0/4.0, gatekeeper 1.0, keystore 1.0 | a keymaster client over binder for the per-user and per-file keys, then fscrypt |
+| 12–17 | FBE with keymint and keystore2, plus metadata encryption | what `skyward-crypto` implements today (`keymint.rs`, `keystore2.rs`, `fscrypt.rs`, `gatekeeper.rs`, `locksettings.rs`, `user.rs`) |
+
+So 12–17 is the modelled case, 10–11 needs a keymaster-3/4 client beside the
+keymint one, and 8–9 needs an FDE path that does not exist in the tree at all.
+That is a feature of the crypto crate, not of this port.
