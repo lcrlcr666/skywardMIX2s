@@ -126,18 +126,25 @@ def add_prototype(text):
 def call_it(text):
     if "wlfw_host_cap_send_sync_msg" in text:
         return text
-    anchor = """	ret = icnss_hw_power_on(penv);
-	if (ret)
-		goto err_setup_msa;"""
-    if anchor not in text:
-        return text
-    replacement = """	ret = wlfw_host_cap_send_sync_msg(penv);
-	if (ret < 0) {
-		ignore_assert = true;
-		goto err_setup_msa;
+    # Mainline's ath10k sends the host capabilities first, before the memory
+    # handshake, and treats a rejection as harmless ("older FW didn't support
+    # this request, which is not fatal").  This firmware rejects it when it
+    # comes late, which is where the first attempt put it.
+    anchor = """		ignore_assert = true;
+		goto fail;
 	}
 
-""" + anchor
+	if (!penv->msa_va) {"""
+    if anchor not in text:
+        return text
+    replacement = """		ignore_assert = true;
+		goto fail;
+	}
+
+	/* Not fatal: firmware older than this message simply says so. */
+	wlfw_host_cap_send_sync_msg(penv);
+
+	if (!penv->msa_va) {"""
     return text.replace(anchor, replacement, 1)
 
 
@@ -155,3 +162,4 @@ for path, edit in ((qmi, add_function), (hdrs, add_prototype), (core, call_it)):
         print(f"unchanged: {path.name}")
 
 print("changed:", ", ".join(changed) if changed else "nothing")
+
