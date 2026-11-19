@@ -33,61 +33,13 @@ jobs:
           echo "== pd-mapper"; ls pd-mapper
           echo "== rmtfs"; ls rmtfs
           echo "== tqftpserv"; ls tqftpserv
-          # On this phone there is no remote processor class for the mapper to
-          # read map names from, so it reads the domain files straight out of
-          # the firmware directory instead.
-          python3 - <<'PY'
-          import pathlib
-          p = pathlib.Path("pd-mapper/pd-mapper.c")
-          t = p.read_text()
-          old = '''\tclass_fd = open("/sys/class/remoteproc", O_RDONLY | O_DIRECTORY);
-          \tif (class_fd < 0) {
-          \t\twarn("failed to open remoteproc class");
-          \t\treturn -1;
-          \t}
-          '''
-          new = '''\tclass_fd = open("/sys/class/remoteproc", O_RDONLY | O_DIRECTORY);
-          \tif (class_fd < 0) {
-          \t\tDIR *local = opendir("/vendor/firmware_mnt/image");
-          \t\tstruct dirent *entry;
-          \t\tif (!local) {
-          \t\t\twarn("failed to open remoteproc class");
-          \t\t\treturn -1;
-          \t\t}
-          \t\twhile ((entry = readdir(local)) != NULL) {
-          \t\t\tsize_t l = strlen(entry->d_name);
-          \t\t\tif (l < 5 || strcmp(entry->d_name + l - 4, ".jsn"))
-          \t\t\t\tcontinue;
-          \t\t\tif (strlen("/vendor/firmware_mnt/image") + 1 + l + 1 > sizeof(json_path))
-          \t\t\t\tcontinue;
-          \t\t\tstrcpy(json_path, "/vendor/firmware_mnt/image/");
-          \t\t\tstrcat(json_path, entry->d_name);
-          \t\t\tassoc_set(json_set, json_path, NULL);
-          \t\t}
-          \t\tclosedir(local);
-          \t\treturn 0;
-          \t}
-          '''
-          if old in t:
-              p.write_text(t.replace(old, new, 1))
-              print("mapper reads the firmware directory directly")
-          else:
-              print("mapper patch did not match")
-          PY
-          # Say which map file was tried and why it failed, so a silent zero
-          # can be told apart from a parse failure.
-          python3 - <<'PY'
-          import pathlib
-          p = pathlib.Path("pd-mapper/pd-mapper.c")
-          t = p.read_text()
-          old = "\tret = pd_load_map(jsn);\n\t\tif (ret < 0)\n\t\t\tbreak;"
-          new = "\tfprintf(stderr, \"loading map %s\\n\", jsn);\n\t\tret = pd_load_map(jsn);\n\t\tif (ret < 0) {\n\t\t\tfprintf(stderr, \"map %s failed: %d\\n\", jsn, ret);\n\t\t\tbreak;\n\t\t}"
-          if old in t:
-              p.write_text(t.replace(old, new, 1))
-              print("map loading is now reported")
-          else:
-              print("map report patch did not match")
-          PY
+          # The locator is patched for this phone: this kernel announces no
+          # remote processors to read a firmware path out of, so the domain
+          # files are read straight from the firmware directory, and every
+          # request is printed so the modem side of the conversation is
+          # visible in a log.
+          python3 ../scripts/patch-pd-mapper.py pd-mapper
+
 
       - name: Build
         run: |
@@ -95,39 +47,12 @@ jobs:
           # Static, so they run in a recovery whose own C library is older than
           # the one they were built against.
           aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/wlfwd wlfwd/wlfwd.c
-          # The modem is started by opening its node and keeping it open; the
-          # node refuses to open while the subsystem is still going down, so the
-          # open is retried until the state settles.
-          cat > out/modemhold.c <<'EOF'
-          #include <fcntl.h>
-          #include <stdio.h>
-          #include <string.h>
-          #include <unistd.h>
-          int main(void)
-          {
-          	const char *state_path = "/sys/bus/msm_subsys/devices/subsys0/state";
-          	const char *node = "/dev/subsys_modem";
-          	char state[32];
-          	int fd, tries;
-          	for (tries = 0; tries < 900; tries++) {
-          		FILE *f = fopen(state_path, "r");
-          		state[0] = 0;
-          		if (f) { if (!fgets(state, sizeof(state), f)) state[0] = 0; fclose(f); }
-          		if (strncmp(state, "OFFLINE", 7) == 0) {
-          			fd = open(node, O_RDONLY);
-          			if (fd >= 0) {
-          				printf("modem opened, holding\n");
-          				fflush(stdout);
-          				for (;;) pause();
-          			}
-          		}
-          		sleep(2);
-          	}
-          	printf("gave up waiting for the modem\n");
-          	return 1;
-          }
-          EOF
-          aarch64-linux-gnu-gcc -O2 -static -Wall -o out/modemhold out/modemhold.c 2>&1 | head -10 || true
+          # The modem is started by opening its node and keeping it open.  The
+          # open is tried whether or not the subsystem says it is ready: on a cold
+          # boot the state reads OFFLINING until the open starts the processor, and a
+          # failed open is reported with its errno, which is the only place the reason
+          # (no firmware, or a boot still winding down) shows up.
+          aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/modemhold wlfwd/modemhold.c
           aarch64-linux-gnu-gcc -O2 -static -Wall -Wextra -o out/pdr-restart wlfwd/pdr-restart.c || true
 
           # pd-mapper is what tells the modem which protection domains exist

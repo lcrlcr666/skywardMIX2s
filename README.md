@@ -256,3 +256,40 @@ A plain macro for the three-part callers then breaks the one-part callers, so
 what is left is renaming the real function and dispatching on the argument
 count across the tree — source surgery with an unknown result afterwards, since
 nothing says the kernel it produces will boot.
+### The modem now comes up in the recovery (2026-11-19)
+
+The blocker recorded above — "the modem announces no services at all" — is
+gone. Three things were wrong, none of them the kernel configuration:
+
+1. nothing mounted the `modem` partition, so the kernel asked ueventd for
+   `modem.mdt` and ueventd looked only in `/etc/firmware`, `/odm/firmware`,
+   `/vendor/firmware` and `/firmware/image`. Mounting the partition at
+   `/firmware` is the whole fix for the modem; the `OFFLINING` state that was
+   blamed earlier is what a failed get leaves behind, not its cause.
+2. the bring-up has an order — `qrtr-ns`, then `pd-mapper`, then the open
+   that starts the processor — and the locator has to be up *before* the
+   modem, or the modem boots into a locator that is not there;
+3. a `oneshot` init service is killed as a process group when its main
+   process exits, which takes the name service, the locator and the holder
+   down with it.
+
+With those fixed, one boot gives:
+
+    4.83 modem-up: qrtr-ns started
+    4.84 servloc: service_locator_new_server: Connection established
+    4.84 [PD-MAPPER] wlan/fw -> 1 domain(s)
+    7.44 modemhold: modem opened, holding
+    8.09 modem-up: modem state ONLINE
+
+and the name service lists the modem's services, WCNSS's DIAG channels
+included. The WLAN driver loads (`wlan_hdd_state wlan major(488)`), `/dev/wlan`
+appears — and `echo ON > /dev/wlan` stops at `icnss: FW is in bad state,
+state: 0x4180`, because the firmware has not published the WLFW service
+(`qrtr-lookup 69` is empty). That is where the work now stops, and it is a
+userspace problem: on this phone the domain is turned on by the vendor's
+`cnss-daemon`, as the sections above describe.
+
+`docs/wlan-bring-up.md` has the logs, the order that works, and the six
+mistakes that cost the most time (including "do not kill the locator while
+the modem is up": the modem faults and, at its default restart level, the
+whole phone restarts).
