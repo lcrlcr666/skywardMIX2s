@@ -79,6 +79,9 @@ jobs:
           # build that has the windowed load tracking's own. Nothing of the
           # scheduler's behaviour changes, and the tracking stays on.
           python3 ../scripts/fix-kernel-tree.py .
+          # icnss sends the WLFW host-capability message before it waits for
+          # the firmware's ready indication; this tree's driver never did.
+          python3 ../scripts/patch-icnss-hostcap.py .
           # The audio and camera techpacks are a second kernel generation's code
           # inside this one and do not compile; they are taken out of the tree,
           # which is what the techpack build file reads to know what to build.
@@ -179,3 +182,4 @@ jobs:
           path: kernel-out/
           if-no-files-found: error
           retention-days: 30
+
