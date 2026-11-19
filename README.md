@@ -335,3 +335,36 @@ effects are visible in one boot's log:
    offers.  `shared-storage.sh` mounts the partition (f2fs, writable) and does
    the binding.  The files come out in the clear on this phone, so a computer
    can read them without the credential.
+
+### The modem needed its file system: RMTFS and the EFS partitions
+
+The modem faulted about forty seconds after coming up, every time, and the
+kernel log said nothing except `Fatal error on the modem`.  It was the modem's
+own fault, and the line that explains it is one from **rmtfs**:
+
+    [storage] failed to open '/boot/modem_fs1': No such file or directory
+    Fatal error on the modem.
+
+The modem asks RMTFS for its file system as it boots (`modem_fs1`, `modem_fs2`,
+`modem_fsc`, `modem_fsg`).  rmtfs maps those onto the phone's EFS partitions
+(`modemst1`, `modemst2`, `fsc`, `fsg`) by **partition label**, under
+`/dev/disk/by-partlabel`, which this recovery's ueventd does not create - and
+without `-P` it looks for the images as files in `/boot` instead.  With both
+fixed (the links made by the boot script, `rmtfs -P`), the modem boots and
+stays up:
+
+    modem-up: wlan module loaded, rc=0
+    modem-up: rmtfs started with the EFS partitions
+    modem-up: modem state ONLINE
+    modem-up: settled at ONLINE          <- and no "Fatal error" after it
+
+The QRTR name service went from 28 services to 69 with it, and now carries
+this recovery's own `Remote file system service` and `TFTP` endpoints.
+
+What is still missing is the firmware's WLFW service (`qrtr-lookup 69`): the
+modem never announces its `wlan_pd` protection domain here, though it does in
+the installed system 0.7 s after coming out of reset.  The next thing to look
+at is the IPA firmware (`ipa_fws`), which the installed system brings up at
+boot (`ipa3_handle_indication_req` sits right beside the domain's indication
+there) and which is never started here; its image is on the vendor partition,
+so `/vendor` has to be mounted where the firmware loader looks.
