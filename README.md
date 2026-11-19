@@ -588,3 +588,35 @@ So the next question is narrow and answerable: what does this firmware wait for
 before it says it is ready?  The knobs to answer it are in place (`icnss.c` and
 `service-notifier.c` print at runtime, and the WLFW indication handlers are in
 `icnss_qmi`).
+
+### The firmware is running and talking (round 10)
+
+With `icnss_qmi.c` printing at runtime, the whole WLFW conversation is on the
+record - and it is a healthy one:
+
+    service-notifier: Indication received from msm/modem/wlan_pd, state: 0x1fffffff
+    icnss_qmi: WLFW server arrive: node 0 port 82
+    icnss_qmi: QMI Server Connected: state: 0x980
+    icnss_qmi: Sending indication register message
+    icnss_qmi: Sending MSA mem info
+    icnss_qmi: Receive mem_region_info_len: 2
+    icnss_qmi: Memory Region: 0 Addr: 0xf9d00000 Size: 0x4000
+    icnss_qmi: Memory Region: 1 Addr: 0xf9d04000 Size: 0xfc000
+    icnss_qmi: Sending MSA ready request message
+    icnss_qmi: Received MSA Ready Indication
+    icnss_qmi: Sending capability message
+    icnss_qmi: Capability, chip_id: 0x30214, board_id: 0xff, soc_id: 0x40030001,
+               fw_version: 0x20090216, fw_build_timestamp: 2019-12-18 08:15,
+               fw_build_id: WLAN.HL.2.0.c3-00534-QCAHLSWMTPLZ-1
+    icnss_qmi: Sending dynamic feature mask request, val 0x1
+
+Note the third line: the modem announces `msm/modem/wlan_pd` as **up**
+(`0x1fffffff`, the value the installed system shows), which is the step this
+work spent rounds on.  The WLAN firmware answers with its identity
+(`WLAN.HL.2.0.c3-00534`, chip `0x30214`), so it is running and the QMI exchange
+is complete on both sides.
+
+What never arrives is `QMI_WLFW_FW_READY_IND_V01`, whose handler icnss has
+registered (`fw_ready_ind_cb`) - so the state stays `0xd83` instead of `0xd87`.
+The board data files the firmware would need (`bdf_*.bin`) are present in
+`/firmware/image`; there is no `regdb.bin` anywhere on the phone.

@@ -113,6 +113,7 @@ if [ -w /sys/kernel/debug/dynamic_debug/control ]; then
 	echo "file service-notifier.c +p" > /sys/kernel/debug/dynamic_debug/control
 	echo "file service-locator.c +p"  > /sys/kernel/debug/dynamic_debug/control
 	echo "file icnss.c +p"            > /sys/kernel/debug/dynamic_debug/control
+	echo "file icnss_qmi.c +p"        > /sys/kernel/debug/dynamic_debug/control
 	echo "file subsys-pil-tz.c +p"    > /sys/kernel/debug/dynamic_debug/control
 	log "kernel debug prints are on"
 fi
@@ -176,6 +177,7 @@ done
 
 log "settled at $(cat $STATE 2>/dev/null)"
 while :; do sleep 3600; done
+
 
 
 
