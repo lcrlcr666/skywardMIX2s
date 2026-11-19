@@ -148,7 +148,24 @@ def call_it(text):
     return text.replace(anchor, replacement, 1)
 
 
-for path, edit in ((qmi, add_function), (hdrs, add_prototype), (core, call_it)):
+def sleep_before_xpu(text):
+    if "MPSS.AT.4.0" in text:
+        return text
+    anchor = """	if (!test_bit(ICNSS_MSA0_ASSIGNED, &penv->state)) {"""
+    if anchor not in text:
+        return text
+    # Mainline's ath10k does exactly this on SDM845, with the reason in the
+    # comment it carries: "sleep for a while inbetween receiving the msa info
+    # response and the XPU update to prevent SDM845 from crashing due to a
+    # security violation, when running MPSS.AT.4.0.c2-01184-SDM845_GEN_PACK-1".
+    # This phone runs MPSS.AT.4.0.c2.6-00335-SDM845_GEN_PACK-1.
+    replacement = """	msleep(20);	/* MPSS.AT.4.0 needs the gap before the XPU update */
+
+""" + anchor
+    return text.replace(anchor, replacement, 1)
+
+
+for path, edit in ((qmi, add_function), (hdrs, add_prototype), (core, call_it), (core, sleep_before_xpu)):
     if not path.exists():
         print(f"missing: {path}")
         continue
@@ -162,4 +179,5 @@ for path, edit in ((qmi, add_function), (hdrs, add_prototype), (core, call_it)):
         print(f"unchanged: {path.name}")
 
 print("changed:", ", ".join(changed) if changed else "nothing")
+
 
