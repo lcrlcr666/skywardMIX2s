@@ -644,3 +644,24 @@ So the next step is small and testable: send `HOST_CAP` and see whether
 `FW_READY` follows.  It can be tried from userspace first (the WLFW service is
 at node 0 port 82), and if that works, as a few lines in `icnss_qmi.c` before
 `cap` in the server-arrive sequence.
+
+### Three more things it is not (round 13)
+
+* **The host-capability message.**  Sending it (as mainline's ath10k does,
+  before the memory handshake) is accepted only as a formality: this firmware
+  rejects it (`result:1 error:1`), and mainline's own comment says a rejection
+  is not fatal - "older FW didn't support this request".  With the message
+  sent first and its rejection ignored, the state is back to `0xd83` and
+  `FW_READY` still does not come.
+* **The gap before the XPU update.**  mainline's ath10k sleeps 20 ms between
+  the MSA memory-info response and the security update, for exactly this
+  modem: `MPSS.AT.4.0.c2-01184-SDM845_GEN_PACK-1`.  This phone runs
+  `MPSS.AT.4.0.c2.6-00335-SDM845_GEN_PACK-1`, and this tree's icnss had no gap
+  at all.  The gap is now there (the log shows 26 ms between the two) and makes
+  no difference to the ready indication.
+* **A second client asking.**  A small tool that registers as a WLFW client and
+  prints every message it receives gets one answer - a rejection (`result:1
+  error:1`) - and then nothing at all for 25 s.  The firmware serves only the
+  client it already registered (icnss), so the indications cannot be observed
+  from outside; what icnss's handlers see is all there is, and `FW_READY` is
+  not among them.
