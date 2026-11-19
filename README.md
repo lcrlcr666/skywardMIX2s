@@ -450,3 +450,19 @@ locator's answer, the listener registered with the modem's servreg), and the
 modem is healthy — but the firmware never starts its `wlan_pd` domain, and the
 IPA firmware, which the installed system brings up and this kernel cannot, is
 the last measurable difference.
+
+### What was ruled out on the way (round 5)
+
+* **Starting the domain from the host is refused.**  `pdr-restart 0 1
+  msm/modem/wlan_pd` against the modem's own servreg notifier answers
+  `result 1 error 9` (disabled / not supported) on a perfectly healthy modem,
+  so the host cannot ask for the domain to be started or restarted.
+* **The installed system's daemons do not run here.**  `cnss-daemon` and
+  `ipacm`, run under the Android 16 runtime, only *look* alive: attached to a
+  terminal they stay up, detached with `setsid` and a closed stdin they exit at
+  once and write nothing.  A daemon that exits when it is not attached to a pty
+  is a daemon failing its own start-up here, not one working.
+* **The installed system's ordering** supports the IPA hypothesis:
+  `ipa_fws: Brought out of reset` / `IPA FW loaded successfully` appear about
+  four seconds into its boot, long before the modem start that makes it
+  announce `wlan_pd` (which follows 0.7 s after the modem comes out of reset).
