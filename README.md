@@ -523,3 +523,38 @@ started.  A full boot with IPA already up (k29) gives the same: IPA's handshake
 with the modem completes (`IPA received MPSS AFTER_POWERUP`,
 `QMI_IPA_INIT_MODEM_DRIVER_REQ_V01 response received`), the modem is ONLINE,
 and `qrtr-lookup 69` is still empty.
+
+### The modem's own configuration was the last missing piece (round 8)
+
+The modem fetches its configuration through **tqftpserv** as it boots:
+
+    read request for /readonly/firmware/image/modem_pr/mcfg/configs/mcfg_hw/mbn_hw.dig
+    read request for /readonly/firmware/image/modem_pr/mcfg/configs/mcfg_sw/mbn_sw.dig
+
+and both were refused, because tqftpserv resolves those paths by scanning
+`/sys/class/remoteproc` - the same empty class that pd-mapper needed its
+fallback for.  Two fixes, both small:
+
+* tqftpserv falls back to the firmware directory the kernel was told to use
+  (`/sys/module/firmware_class/parameters/path`, then `/lib/firmware`), so the
+  MCFG files are served;
+* the boot script creates tqftpserv's read-write directory
+  (`/var/lib/tqftpserv`), without which its first request is refused outright.
+
+With those, the boot after it looks like this:
+
+    read request .../mcfg_sw/mbn_sw.dig  -> served
+    qrtr-lookup 69:  69  1  0  0  82  ATH10k WLAN firmware service
+
+and icnss's state machine follows it all the way into the firmware:
+
+    State: 0xd83(FW CONN | POWER ON | SSR REGISTERED | PDR REGISTERED | MSA0 ASSIGNED | WLAN FW EXISTS)
+    ind_register_req/resp 1, msa_info_req/resp 1, msa_ready_req/resp 1, cap_req/resp 1
+    icnss: Regulator vdd-1.3-rfa being enabled ... vdd-3.3-ch0 being enabled
+
+So the protection domain is up, the WLFW service exists, icnss has connected
+to it, powered the WLAN chip, handed it its memory and read its capabilities -
+**the chain that this work has been chasing since the start is now complete up
+to the firmware's own "ready"**.  What is still missing is that last
+indication: `FW_READY` stays 0, and `wlfwd` shows the same from the outside
+(`IND_REGISTER OK, fw_status 0x5`, then `waiting up to 10 s for FW_MEM_READY`).
