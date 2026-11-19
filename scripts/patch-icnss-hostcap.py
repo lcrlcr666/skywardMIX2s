@@ -165,7 +165,36 @@ def sleep_before_xpu(text):
     return text.replace(anchor, replacement, 1)
 
 
-for path, edit in ((qmi, add_function), (hdrs, add_prototype), (core, call_it), (core, sleep_before_xpu)):
+def force_probe(text):
+    """Probe the driver even though the firmware never said it is ready.
+
+    icnss calls icnss_call_driver_probe() only from the FW_READY event, and the
+    driver sends QMI_WLFW_WLAN_MODE_REQ from its probe.  If this firmware waits
+    for that request before it declares itself ready, the two wait for each
+    other.  Breaking it from the host side is the experiment: mark the firmware
+    ready when it is merely connected, so the probe happens and the mode
+    request goes out.
+    """
+    if "forced: the firmware" in text:
+        return text
+    anchor = """	if (!test_bit(ICNSS_FW_READY, &penv->state)) {
+		icnss_pr_dbg("FW is not ready yet, state: 0x%lx\\n",
+			     penv->state);
+		goto out;
+	}"""
+    if anchor not in text:
+        return text
+    replacement = """	if (!test_bit(ICNSS_FW_READY, &penv->state)) {
+		/* forced: the firmware is connected, so let the driver come up
+		 * and send its mode request; the ready indication may follow. */
+		icnss_pr_err("FW is not ready, probing anyway, state: 0x%lx\\n",
+			     penv->state);
+		set_bit(ICNSS_FW_READY, &penv->state);
+	}"""
+    return text.replace(anchor, replacement, 1)
+
+
+for path, edit in ((qmi, add_function), (hdrs, add_prototype), (core, call_it), (core, sleep_before_xpu), (core, force_probe)):
     if not path.exists():
         print(f"missing: {path}")
         continue
@@ -179,5 +208,6 @@ for path, edit in ((qmi, add_function), (hdrs, add_prototype), (core, call_it), 
         print(f"unchanged: {path.name}")
 
 print("changed:", ", ".join(changed) if changed else "nothing")
+
 
 
