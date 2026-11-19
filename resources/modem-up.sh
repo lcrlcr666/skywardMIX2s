@@ -105,6 +105,18 @@ else
 	log "no wlan module on the data partition"
 fi
 
+# 2a. the kernel's own account of the WLAN bring-up, turned on before the
+# modem boots so the registration and the modem's answer are both in the log.
+mkdir -p /sys/kernel/debug 2>/dev/null
+mount -t debugfs none /sys/kernel/debug 2>/dev/null
+if [ -w /sys/kernel/debug/dynamic_debug/control ]; then
+	echo "file service-notifier.c +p" > /sys/kernel/debug/dynamic_debug/control
+	echo "file service-locator.c +p"  > /sys/kernel/debug/dynamic_debug/control
+	echo "file icnss.c +p"            > /sys/kernel/debug/dynamic_debug/control
+	echo "file subsys-pil-tz.c +p"    > /sys/kernel/debug/dynamic_debug/control
+	log "kernel debug prints are on"
+fi
+
 # 2. the name service, before anything registers with it.  It runs with -f,
 # as Android runs it: without forwarding, a lookup for a service that lives on
 # another node - the modem's servreg, which is where the WLAN protection
@@ -125,7 +137,11 @@ log "pd-mapper started"
 # there.
 mkdir -p /lib
 [ -e /lib/firmware ] || ln -s "$FW_DIR/image" /lib/firmware
-start_bg /skyward/tqftpserv
+# tqftpserv serves the files a remote processor asks for; it needs its
+# read-write directory, which this ramdisk does not have - without it the modem's
+# first request is refused ("failed to create tqftpserv readwrite directory").
+mkdir -p /var/lib/tqftpserv
+(/skyward/tqftpserv -d >/data/local/tmp/tftp.log 2>&1 &)
 sleep 1
 log "tqftpserv started"
 # The modem's file system: RMTFS, serving the EFS partitions.  It finds them
@@ -160,6 +176,8 @@ done
 
 log "settled at $(cat $STATE 2>/dev/null)"
 while :; do sleep 3600; done
+
+
 
 
 
