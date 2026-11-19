@@ -2269,6 +2269,12 @@ const ABOUT_LOGO_FADE_DP: f32 = 40.0;
 const ABOUT_FIELD_DP: f32 = 389.0;
 /// The field is worked out every this many pixels and filled in between.
 const FIELD_CELL: usize = 24;
+
+/// How often the About page's field is drawn, in milliseconds.  The field is
+/// a slow wash over the whole screen and drawing it costs a whole-screen
+/// paint; thirty times a second is indistinguishable from sixty and leaves
+/// the frame time to the rest of the page.
+const FIELD_MS: u64 = 33;
 /// Before the panel goes off it stays dim this long, in milliseconds, or
 /// a fifth of the screen-off time when that is shorter.
 const DIM_MS: u64 = 7000;
@@ -2671,6 +2677,9 @@ pub struct App {
     snap: bool,
     /// The About page's moving field, while that page shows.
     glow: Option<GlowClock>,
+    /// When the field was last drawn: it is drawn at [FIELD_MS], not at the
+    /// panel's rate.
+    field_at: Option<u64>,
     /// The terminal page's shell, from when it is first opened; it goes on
     /// while other pages show.
     term: Option<Term>,
@@ -2772,6 +2781,7 @@ impl App {
             bar: bar_fade(start == Screen::About),
             snap: false,
             glow: None,
+            field_at: None,
             term: None,
             display_on: true,
             active: None,
@@ -3054,7 +3064,9 @@ impl App {
                 Some(g) if std::ptr::eq(g.look(), look) => g.advance(now),
                 _ => self.glow = Some(GlowClock::new(look, now)),
             }
-            if self.glowing() {
+            let due = self.field_at.map_or(true, |at| now.saturating_sub(at) >= FIELD_MS);
+            if self.glowing() && due {
+                self.field_at = Some(now);
                 self.dirty = true;
             }
         }
@@ -11652,3 +11664,4 @@ mod tests {
         assert!(!app.display_on());
     }
 }
+
