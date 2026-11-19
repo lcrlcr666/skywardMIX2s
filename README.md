@@ -368,3 +368,39 @@ at is the IPA firmware (`ipa_fws`), which the installed system brings up at
 boot (`ipa3_handle_indication_req` sits right beside the domain's indication
 there) and which is never started here; its image is on the vendor partition,
 so `/vendor` has to be mounted where the firmware loader looks.
+
+### After the modem's file system: everything but WLFW
+
+With RMTFS serving the EFS partitions the modem comes up and stays up, and its
+whole QMI stack is published — the name service now carries the same shape as
+the installed system's: WDS, DMS, NAS, QoS, WMS, UIM, IMS, PDS, thermal, the
+subsystem control service, IPA control, and this recovery's own remote file
+system and TFTP endpoints (67 services).
+
+The host side of the WLAN bring-up is then complete and can be read off one
+boot:
+
+    3.99  wlan: Loading driver v5.2.022.12B
+    4.39  wlan_hdd_state wlan major(488) initialized
+    5.44  [PD-MAPPER] wlan/fw -> 1 domain(s)          <- icnss's locator query
+    10.46 service-notifier: new_server ... 180 service <- listener registered
+    ...   (nothing)                                    <- no announcement
+
+The installed system gets one line here that this recovery never does:
+
+    service-notifier: Indication received from msm/modem/wlan_pd, state: 0x1fffffff
+
+and everything after it (`icnss_qmi: QMI Server Connected`, `WLAN FW is
+ready`) follows.  So the modem simply never starts its `wlan_pd` protection
+domain here, and that is the whole of what is left.
+
+Tried on this round, without success:
+
+* the installed system's `cnss-daemon`, run under the Android 16 runtime
+  (extracted from `com.android.runtime.apex`, mounted, A16 linker and
+  libraries).  It runs — it stays up for as long as it is attached to a
+  terminal — but the modem still publishes no WLFW;
+* starting the IPA firmware, which the installed system brings up at boot and
+  this recovery never does.  With `/vendor` mounted so the loader can see
+  `/vendor/firmware/ipa_fws.mdt`, opening `/dev/subsys_ipa_fws` loads the image
+  from `0x8c400000` and then the phone hangs and the watchdog restarts it.
