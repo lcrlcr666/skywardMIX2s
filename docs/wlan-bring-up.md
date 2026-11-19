@@ -125,3 +125,76 @@ out of the firmware directory when `/sys/class/remoteproc` is empty (this
 kernel has no remoteproc entries for the phone's processors), and it prints
 `[PD-MAPPER] <name> -> N domain(s)` for every request so the modem's side of
 the conversation is visible in `dmesg`.
+
+## Second session: what the working system does, and where the recovery stops
+
+Read 2026-11-19, with root in the installed Android (Magisk `su`) to compare the
+two environments side by side.
+
+### The chain in the installed system
+
+```
+[   11.399] service-notifier: new_server: ... 74 service      (adsp root_pd)
+[   14.479] service-notifier: new_server: ... 180 service     (modem)
+[   15.134] service-notifier: root_service_service_ind_cb: Indication received
+           from msm/modem/wlan_pd, state: 0x1fffffff, trans-id: 1
+[   15.136] icnss_qmi: QMI Server Connected: state: 0x980
+[   18.482] icnss: WLAN FW is ready: 0xd87
+```
+
+So the WLAN protection domain is announced by the *modem*, about 0.7 s after the
+modem comes out of reset, and icnss then connects to the WLFW service and the
+firmware reports ready.  Nothing in the recovery reproduces that step.
+
+### The same moment in the recovery
+
+```
+[    7.505] modemhold: modem opened, holding
+[    8.154] modem-up: modem state ONLINE
+[    9.704] service-notifier: new_server: ... 180 service
+   ... no indication, no WLFW ...
+```
+
+`qrtr-lookup 69` stays empty.  `echo ON > /dev/wlan` stops at
+`icnss: FW is in bad state, state: 0x4180`.
+
+The modem also **faults on its own about 43 s after it comes up** in the
+recovery (`Fatal error on the modem`, restart level `RELATED`, so only the modem
+restarts).  That is the shape of the remaining problem: in the recovery the
+modem announces SSCTL, servreg and its DIAG channels, but not its QMI services —
+in the installed system the name service carries WDS, DMS, NAS, WMS, IPA control
+and about a hundred others, and here it carries none of them.
+
+### What was tried, and what it showed
+
+| Try | Result |
+| --- | --- |
+| `qrtr-ns -f` (as Android runs it) | no change |
+| WLAN module loaded before the modem boots | no change |
+| modem restarted warm, driver loaded | `PD service down ... cause: Root PD shutdown`, still no WLFW |
+| `pdr-restart 0 1 msm/modem/wlan_pd` | `result 1 error 9` — the QMI string was missing its length byte |
+| `servreg-restart` with the string encoded properly | `sendto: Connection reset by peer` |
+| vendor `cnss-daemon` under the A16 runtime | runs and stays alive, does not publish WLFW |
+| `tqftpserv` from `/lib/firmware` (→ the modem partition) | runs; the modem asks it nothing |
+| `rmtfs` | **works now**: this kernel hands the modem's memory over as a plain uio device (`/dev/uio0`, named `rmtfs`, 2 MB at `0xf9e01000`), not as `/dev/qcom_rmtfs_mem1`; `tools-src/rmtfs` is patched for that and prints the mapping |
+
+The vendor partition was read for hints: `pd-mapper`, `qrtr-ns` and
+`cnss-daemon` are the three WLAN pieces its init starts, and the protection
+domain maps (`modemr.jsn` → `msm/modem/root_pd`, `modemuw.jsn` →
+`msm/modem/wlan_pd`, both instance 180) are the same files the recovery already
+serves.
+
+### Where to go next
+
+1. **Give the modem the file service it expects, at boot.**  `rmtfs` now maps
+   the shared memory and runs; it is not in the image yet.  If the modem's QMI
+   services appear once it can reach that service, everything after that is the
+   path already written down above.
+2. **Compare the QMI service lists** (installed system vs recovery) — this is
+   the sharpest measurement available and needs no guessing: the missing set is
+   the list of what to give the modem.
+3. If the domain still does not start, the kernel has the call for it:
+   `service_notif_pd_restart()` in `drivers/soc/qcom/service-notifier.c` is what
+   icnss uses for recovery, and a kernel that calls it when the driver is
+   enabled would start the PD itself.  That needs a kernel build, and the
+   account's Actions minutes are exhausted.

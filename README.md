@@ -293,3 +293,20 @@ userspace problem: on this phone the domain is turned on by the vendor's
 mistakes that cost the most time (including "do not kill the locator while
 the modem is up": the modem faults and, at its default restart level, the
 whole phone restarts).
+### The last step: the modem does not announce its WLAN domain (2026-11-19)
+
+With the modem up and the locator answering, one step is still missing, and it
+is now measured rather than guessed.  In the installed system the modem
+announces its WLAN protection domain 0.7 s after it comes out of reset:
+
+    service-notifier: Indication received from msm/modem/wlan_pd, state: 0x1fffffff
+    icnss_qmi: QMI Server Connected: state: 0x980
+    icnss: WLAN FW is ready: 0xd87
+
+In the recovery the same modem, the same firmware and the same maps give the
+notifier connection and then nothing, and the modem faults on its own about
+43 s later.  In the installed system the QRTR name service carries the modem's
+whole QMI stack (WDS, DMS, NAS, IPA control, ten TFTP endpoints, the remote file
+system service); in the recovery it carries only SSCTL, servreg and the DIAG
+channels.  That difference is the remaining work — see
+`docs/wlan-bring-up.md`, section "Second session".
