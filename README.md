@@ -620,3 +620,27 @@ What never arrives is `QMI_WLFW_FW_READY_IND_V01`, whose handler icnss has
 registered (`fw_ready_ind_cb`) - so the state stays `0xd83` instead of `0xd87`.
 The board data files the firmware would need (`bdf_*.bin`) are present in
 `/firmware/image`; there is no `regdb.bin` anywhere on the phone.
+
+### Why the firmware withholds "ready" - the one message this kernel never sends
+
+`icnss.wlan_enable()` refuses to start the driver until the firmware's ready
+indication arrives, and that indication (`QMI_WLFW_FW_READY_IND_V01`, `0x0021`)
+has a registered handler in this kernel (`fw_ready_ind_cb`) that is simply
+never called.  Reading the WLFW IDL that ships with this tree
+(`wlan_firmware_service_v01.h`) against what this kernel actually sends narrows
+it to one message:
+
+    QMI_WLFW_HOST_CAP_REQ_V01   0x0034   - the host's capabilities
+
+The IDL declares it, with fields this phone's firmware would want
+(`num_clients`, `wake_msi`, `gpios`, `bdf_support`, `cal_*`, `platform_name`,
+`host_build_type`), and `icnss.c` / `icnss_qmi.c` in this tree **never send
+it** - a grep for `host_cap` in either file finds nothing.  The installed
+system's kernel is a newer tree (4.19.325-cip128 against this one's
+`cip136-st20`), and this is exactly the kind of message a newer icnss would
+send before the firmware declares itself ready.
+
+So the next step is small and testable: send `HOST_CAP` and see whether
+`FW_READY` follows.  It can be tried from userspace first (the WLFW service is
+at node 0 port 82), and if that works, as a few lines in `icnss_qmi.c` before
+`cap` in the server-arrive sequence.
