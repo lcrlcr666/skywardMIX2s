@@ -260,12 +260,16 @@ int wlfw_bdf_download_send_sync(struct icnss_priv *priv)
 		release_firmware(fw);
 		return -ENOMEM;
 	}
-	icnss_pr_info("board data: sending %u bytes in chunks of %u\n",
-		      remaining, (u32)BDF_CHUNK);
-
 	data = fw->data;
 	remaining = fw->size;
+	icnss_pr_info("board data: %u bytes, chunks of %u\n",
+		      remaining, (u32)BDF_CHUNK);
 	while (remaining && !ret) {
+		icnss_pr_info("board data: segment %u, %u bytes%s\n",
+			      sent / BDF_CHUNK,
+			      min_t(u32, remaining, (u32)BDF_CHUNK),
+			      (min_t(u32, remaining, (u32)BDF_CHUNK) == remaining)
+				      ? " (last)" : "");
 		req->valid = 1;
 		req->file_id_valid = 1;
 		req->file_id = 0;
@@ -441,6 +445,7 @@ for path, edit in ((qmi, add_function), (qmi, add_bdf_and_cal), (qmi, add_firmwa
         print(f"unchanged: {path.name}")
 
 print("changed:", ", ".join(changed) if changed else "nothing")
+
 
 
 
