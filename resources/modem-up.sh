@@ -71,6 +71,33 @@ if ! grep -q " /data " /proc/mounts; then
 		mount -t f2fs -o ro "$dev" /data 2>/dev/null && break
 	done
 fi
+# The WLAN driver reads its own configuration from /vendor/firmware/wlan/qca_cld
+# (WCNSS_qcom_cfg.ini, wlan_mac.bin).  The loader only looks in /etc/firmware,
+# /odm/firmware, /vendor/firmware and /firmware/image, so the vendor partition
+# is mounted where it expects to find it.
+mkdir -p /vendor
+if ! grep -q " /vendor " /proc/mounts; then
+	mount -o bind /mnt/vendor /vendor 2>/dev/null ||
+		mount -t ext4 -o ro /dev/block/by-name/vendor /vendor 2>/dev/null
+fi
+[ -f /vendor/firmware/wlan/qca_cld/WCNSS_qcom_cfg.ini ] && log "wlan driver config is visible"
+[ -f /vendor/firmware/ipa_fws.mdt ] && log "ipa firmware is visible"
+
+# The IPA firmware, before the modem: the installed system loads it four
+# seconds into its boot, long before the modem start that makes it announce
+# wlan_pd.  /dev/ipa's write handler is the driver's own entry point for it
+# (ipa3_write -> ipa3_fw_loading_work), so this is the driver's path, not a
+# bypass of it.
+echo 1 > /dev/ipa 2>/dev/null
+i=0
+while [ $i -lt 15 ]; do
+	st="$(cat /sys/bus/msm_subsys/devices/subsys6/state 2>/dev/null)"
+	[ "$st" = "ONLINE" ] && break
+	i=$((i + 1))
+	sleep 1
+done
+log "ipa firmware: $(cat /sys/bus/msm_subsys/devices/subsys6/state 2>/dev/null)"
+
 if [ -f /data/local/tmp/qca_cld3_wlan.ko ]; then
 	insmod /data/local/tmp/qca_cld3_wlan.ko
 	log "wlan module loaded, rc=$?"
@@ -109,7 +136,7 @@ mkdir -p /dev/disk/by-partlabel
 for n in modemst1 modemst2 fsg fsc; do
 	[ -e "/dev/block/by-name/$n" ] && ln -sf "/dev/block/by-name/$n" "/dev/disk/by-partlabel/$n"
 done
-start_bg /skyward/rmtfs -P
+(/skyward/rmtfs -P -v >/data/local/tmp/rmtfs.log 2>&1 &)
 sleep 1
 log "rmtfs started with the EFS partitions"
 
@@ -133,6 +160,10 @@ done
 
 log "settled at $(cat $STATE 2>/dev/null)"
 while :; do sleep 3600; done
+
+
+
+
 
 
 
