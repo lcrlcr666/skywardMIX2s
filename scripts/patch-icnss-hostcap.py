@@ -249,15 +249,19 @@ int wlfw_bdf_download_send_sync(struct icnss_priv *priv)
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
 	if (!req) {
+		icnss_pr_err("board data: no memory for the request\n");
 		release_firmware(fw);
 		return -ENOMEM;
 	}
 	resp = kzalloc(sizeof(*resp), GFP_KERNEL);
 	if (!resp) {
+		icnss_pr_err("board data: no memory for the response\n");
 		kfree(req);
 		release_firmware(fw);
 		return -ENOMEM;
 	}
+	icnss_pr_info("board data: sending %u bytes in chunks of %u\n",
+		      remaining, (u32)BDF_CHUNK);
 
 	data = fw->data;
 	remaining = fw->size;
@@ -437,6 +441,7 @@ for path, edit in ((qmi, add_function), (qmi, add_bdf_and_cal), (qmi, add_firmwa
         print(f"unchanged: {path.name}")
 
 print("changed:", ", ".join(changed) if changed else "nothing")
+
 
 
 
