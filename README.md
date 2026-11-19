@@ -466,3 +466,36 @@ the last measurable difference.
   `ipa_fws: Brought out of reset` / `IPA FW loaded successfully` appear about
   four seconds into its boot, long before the modem start that makes it
   announce `wlan_pd` (which follows 0.7 s after the modem comes out of reset).
+
+### A kernel that can be asked what it is doing (round 6)
+
+`kernel.yml` now builds with `CONFIG_DEBUG_FS` and `CONFIG_DYNAMIC_DEBUG`, and
+that changes the diagnosis from guessing to reading.  What icnss says about
+itself, with its own debug prints turned on at runtime
+(`echo "file icnss.c +p" > /sys/kernel/debug/dynamic_debug/control`):
+
+    icnss: Registering driver, state: 0x180
+    icnss: Processing event: REGISTER_DRIVER(3), state: 0x180
+    icnss: FW is not ready yet, state: 0x180
+
+and `/sys/kernel/debug/icnss/stats` gives the state plainly:
+
+    SERVER_ARRIVE 0    FW_READY 0    REGISTER_DRIVER 0 (before) / processed (after)
+    State: 0x180(SSR REGISTERED | PDR REGISTERED)
+
+So the host's half is not merely "probably fine": icnss registers the driver,
+is in PDR mode, and waits for the firmware's WLFW service — which never
+appears.  On the IPA side there is no `/sys/kernel/debug/ipa` at all (only
+`ipa_usb` and `rmnet_ipa`), which is the same conclusion from the other
+direction: the IPA driver never finished its initialisation here.
+
+### Building a kernel into this image
+
+The recovery image's kernel section is **`Image.gz` followed by the phone's
+device tree** (6,284,856 bytes, `rom.dtb`), not `Image.gz` alone; an image built
+without the tail does not boot (the bootloader drops to fastboot).  With the
+tail, the CI-built kernel composes straight onto this work's ramdisk:
+
+    python mk-k28.py k419e/Image.gz     # k419e = the workflow's artifact
+
+and the module that goes with it is that artifact's `qca_cld3_wlan.ko`.
