@@ -426,3 +426,27 @@ For Skyward in general the picture is wider, and this phone is the easy case:
 So 12–17 is the modelled case, 10–11 needs a keymaster-3/4 client beside the
 keymint one, and 8–9 needs an FDE path that does not exist in the tree at all.
 That is a feature of the crypto crate, not of this port.
+
+### The one kernel-side difference left: IPA firmware never loads here
+
+The installed system loads the IPA firmware during boot and says so:
+
+    IPA FW loaded successfully
+
+This recovery never does.  Its IPA driver does bind (`/sys/bus/platform/drivers/ipa`
+holds `1e00000.qcom,ipa`), but the firmware behind it is never started:
+
+    # CONFIG-free: ipa_fws subsystem state stays OFFLINING
+    ipa ipa3_uc_state_check:488 uC interface not initialized
+
+Loading it by hand (`open("/dev/subsys_ipa_fws")` with `/vendor` mounted so the
+loader can see `ipa_fws.mdt`) does start it — `ipa_fws: loading from
+0x8c400000` — and then hangs the phone in the middke of the segment requests,
+which the watchdog turns into a restart.  Twice.
+
+That is where the WLAN bring-up now stands: every piece on the host side is in
+place (driver, its configuration from `/vendor/firmware/wlan/qca_cld`, the
+locator's answer, the listener registered with the modem's servreg), and the
+modem is healthy — but the firmware never starts its `wlan_pd` domain, and the
+IPA firmware, which the installed system brings up and this kernel cannot, is
+the last measurable difference.
