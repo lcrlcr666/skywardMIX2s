@@ -91,6 +91,7 @@ jobs:
           rm -rf techpack/camera-sdm845
           : > techpack/audio/Makefile
           : > techpack/audio/Kconfig
+          printf '%s\n' '# no techpack objects are built for this recovery kernel' > techpack/Makefile
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
