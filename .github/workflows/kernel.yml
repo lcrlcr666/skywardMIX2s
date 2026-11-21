@@ -92,6 +92,25 @@ jobs:
           # icnss sends the WLFW host-capability message before it waits for
           # the firmware's ready indication; this tree's driver never did.
           python3 ../scripts/patch-icnss-hostcap.py .
+          # This WALT file references the old cluster capacity fields. The
+          # current struct exposes max_possible_capacity with the same role.
+          python3 - <<'PY'
+          import pathlib, re
+          p = pathlib.Path("kernel/sched/walt.c")
+          t = p.read_text()
+          start = t.index("static int
+group_will_fit(")
+          end = t.index("
+}
+", start) + 3
+          f = t[start:end]
+          if f.count("cluster->capacity") != 2 or len(re.findall(r"\\bmax_capacity\\b", f)) != 1:
+              raise SystemExit("unexpected group_will_fit source; refusing broad edit")
+          f = f.replace("cluster->capacity", "cluster->max_possible_capacity")
+          f = re.sub(r"\\bmax_capacity\\b", "max_possible_capacity", f)
+          p.write_text(t[:start] + f + t[end:])
+          print("WALT group_will_fit uses current cluster capacity fields")
+          PY
           # WALT expects a load-output pointer; this non-reporting caller has none.
           python3 - <<'PY'
           import pathlib, re
