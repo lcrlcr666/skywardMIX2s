@@ -31,8 +31,12 @@ match = re.search(r"static int\s+group_will_fit\(.*?\n\}", text, re.S)
 if not match:
     raise SystemExit("kernel/sched/walt.c: group_will_fit was not found")
 function = match.group(0)
-if function.count("cluster->capacity") != 2 or len(re.findall(r"\bmax_capacity\b", function)) != 1:
-    raise SystemExit("kernel/sched/walt.c: unexpected group_will_fit body")
+capacity_refs = function.count("cluster->capacity")
+max_ref = len(re.findall(r"\bmax_capacity\b", function))
+if capacity_refs != 2 or max_ref not in (0, 1):
+    raise SystemExit(
+        f"kernel/sched/walt.c: unexpected group_will_fit body ({capacity_refs=}, {max_ref=})"
+    )
 function = function.replace("cluster->capacity", "cluster->max_possible_capacity")
 function = re.sub(r"\bmax_capacity\b", "max_possible_capacity", function)
 walt.write_text(text[:match.start()] + function + text[match.end():])
