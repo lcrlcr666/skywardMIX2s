@@ -121,8 +121,7 @@ jobs:
             scripts/config --file out/.config -e "$sym" || true
           done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
-          # Drop incompatible techpack sources after Kconfig parsing is complete.
-          rm -rf techpack/audio techpack/camera-sdm845
+          # Retain techpack Kconfig files: configuration disables unsupported components.
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|MSM_QMI_INTERFACE|ICNSS|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -8
 
       - name: Build
