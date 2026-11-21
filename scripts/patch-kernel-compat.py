@@ -31,12 +31,8 @@ match = re.search(r"static int\s+group_will_fit\(.*?\n\}", text, re.S)
 if not match:
     raise SystemExit("kernel/sched/walt.c: group_will_fit was not found")
 function = match.group(0)
-capacity_refs = function.count("cluster->capacity")
-max_ref = len(re.findall(r"\bmax_capacity\b", function))
-if capacity_refs not in (2, 3) or max_ref not in (0, 1):
-    raise SystemExit(
-        f"kernel/sched/walt.c: unexpected group_will_fit body ({capacity_refs=}, {max_ref=})"
-    )
+if function.count("cluster->capacity") != 2 or len(re.findall(r"\bmax_capacity\b", function)) != 1:
+    raise SystemExit("kernel/sched/walt.c: unexpected group_will_fit body")
 function = function.replace("cluster->capacity", "cluster->max_possible_capacity")
 function = re.sub(r"\bmax_capacity\b", "max_possible_capacity", function)
 walt.write_text(text[:match.start()] + function + text[match.end():])
@@ -46,6 +42,14 @@ replace_once(
     "kernel/sched/fair.c",
     r"(?m)(unsigned long util\s*=\s*cpu_util_freq\(cpu)\);",
     r"\1, NULL);",
+)
+
+# boost_kick_cpus should kick non-maximum-capacity CPUs. The newer WALT tree
+# exposes that decision directly instead of cpu_capacity()/max_capacity.
+replace_once(
+    "kernel/sched/boost.c",
+    r"cpu_capacity\(i\)\s*!=\s*max_capacity",
+    r"!is_max_capacity_cpu(i)",
 )
 
 print("Applied scheduler tracepoint and WALT compatibility patches")
