@@ -98,17 +98,17 @@ jobs:
           import pathlib, re
           p = pathlib.Path("kernel/sched/walt.c")
           t = p.read_text()
-          start = t.index("static int
-group_will_fit(")
-          end = t.index("
-}
-", start) + 3
-          f = t[start:end]
-          if f.count("cluster->capacity") != 2 or len(re.findall(r"\\bmax_capacity\\b", f)) != 1:
+          pattern = r"static int\s+group_will_fit\(.*?
+\}"
+          m = re.search(pattern, t, re.S)
+          if not m:
+              raise SystemExit("group_will_fit function not found")
+          f = m.group(0)
+          if f.count("cluster->capacity") != 2 or len(re.findall(r"\bmax_capacity\b", f)) != 1:
               raise SystemExit("unexpected group_will_fit source; refusing broad edit")
           f = f.replace("cluster->capacity", "cluster->max_possible_capacity")
-          f = re.sub(r"\\bmax_capacity\\b", "max_possible_capacity", f)
-          p.write_text(t[:start] + f + t[end:])
+          f = re.sub(r"\bmax_capacity\b", "max_possible_capacity", f)
+          p.write_text(t[:m.start()] + f + t[m.end():])
           print("WALT group_will_fit uses current cluster capacity fields")
           PY
           # WALT expects a load-output pointer; this non-reporting caller has none.
