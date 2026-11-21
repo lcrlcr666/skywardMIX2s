@@ -84,12 +84,13 @@ jobs:
           # icnss sends the WLFW host-capability message before it waits for
           # the firmware's ready indication; this tree's driver never did.
           python3 ../scripts/patch-icnss-hostcap.py .
-          # The audio and camera techpacks are a second kernel generation's code
-          # inside this one and do not compile here; nothing about the recovery's
-          # WLAN bring-up uses them. Take the tree out and empty techpack/Kconfig
-          # so Kconfig parsing does not follow the deleted directory.
-          rm -rf techpack/audio techpack/camera-sdm845
-          : > techpack/Kconfig
+          # The audio techpack is a second kernel generation's code inside this one
+          # and does not compile here; nothing about the recovery's WLAN bring-up
+          # uses it. Keep the directory (Kbuild still descends into it) but empty
+          # its Makefile and Kconfig, so no object is built and no option exists.
+          rm -rf techpack/camera-sdm845
+          : > techpack/audio/Makefile
+          : > techpack/audio/Kconfig
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
