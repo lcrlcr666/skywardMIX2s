@@ -78,7 +78,7 @@ jobs:
           # default, and the second cpu_util_freq of sched.h is kept out of a
           # build that has the windowed load tracking's own. Nothing of the
           # scheduler's behaviour changes, and the tracking stays on.
-          python3 ../scripts/fix-kernel-tree.py .
+          PATCH_SCHED=1 python3 ../scripts/fix-kernel-tree.py .
           # icnss sends the WLFW host-capability message before it waits for
           # the firmware's ready indication; this tree's driver never did.
           python3 ../scripts/patch-icnss-hostcap.py .
