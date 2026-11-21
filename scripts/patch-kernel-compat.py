@@ -72,6 +72,25 @@ tune_replacement = (
     "\t{\n"
     "\t\t.name = \"sched_boost_no_override\","
 )
-tune.write_text(tune_text.replace(tune_anchor, tune_replacement, 1))
+tune_text = tune_text.replace(tune_anchor, tune_replacement, 1)
+# The wrapper functions are guarded by both options; match the cftype guard.
+entry_anchor = (
+    "#ifdef CONFIG_SCHED_WALT\n"
+    "\t{\n"
+    "\t\t.name = \"sched_boost_no_override\","
+)
+if tune_text.count(entry_anchor) != 1:
+    raise SystemExit(
+        "kernel/sched/tune.c: expected one WALT cftype guard, "
+        f"found {tune_text.count(entry_anchor)}"
+    )
+tune_text = tune_text.replace(
+    entry_anchor,
+    "#if defined(CONFIG_SCHED_WALT) && defined(CONFIG_STUNE_ASSIST)\n"
+    "\t{\n"
+    "\t\t.name = \"sched_boost_no_override\",",
+    1,
+)
+tune.write_text(tune_text)
 
 print("Applied scheduler tracepoint, WALT, boost, and schedtune compatibility fixes")
