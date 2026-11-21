@@ -79,6 +79,16 @@ jobs:
           # build that has the windowed load tracking's own. Nothing of the
           # scheduler's behaviour changes, and the tracking stays on.
           PATCH_SCHED=1 python3 ../scripts/fix-kernel-tree.py .
+          # The WALT tree exposes capacity_of(), not cpu_capacity(), to trace code.
+          python3 - <<'PY'
+          import pathlib, re
+          p = pathlib.Path("include/trace/events/sched.h")
+          t = p.read_text()
+          t, n = re.subn(r"(__entry->capacity\s*=\s*)cpu_capacity\(rq->cpu\)", r"\1capacity_of(rq->cpu)", t, count=1)
+          if n != 1:
+              raise SystemExit(f"expected one tracepoint call; replaced {n}")
+          p.write_text(t)
+          PY
           # icnss sends the WLFW host-capability message before it waits for
           # the firmware's ready indication; this tree's driver never did.
           python3 ../scripts/patch-icnss-hostcap.py .
