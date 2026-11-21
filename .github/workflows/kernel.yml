@@ -79,53 +79,14 @@ jobs:
           # build that has the windowed load tracking's own. Nothing of the
           # scheduler's behaviour changes, and the tracking stays on.
           PATCH_SCHED=1 python3 ../scripts/fix-kernel-tree.py .
-          # The WALT tree exposes capacity_of(), not cpu_capacity(), to trace code.
-          python3 - <<'PY'
-          import pathlib, re
-          p = pathlib.Path("include/trace/events/sched.h")
-          t = p.read_text()
-          t, n = re.subn(r"(__entry->capacity\s*=\s*)cpu_capacity\(rq->cpu\)", r"\1capacity_of(rq->cpu)", t, count=1)
-          if n != 1:
-              raise SystemExit(f"expected one tracepoint call; replaced {n}")
-          p.write_text(t)
-          PY
+          # Apply the compatibility edits evidenced by prior kernel build logs.
+          python3 ../scripts/patch-kernel-compat.py .
           # icnss sends the WLFW host-capability message before it waits for
           # the firmware's ready indication; this tree's driver never did.
           python3 ../scripts/patch-icnss-hostcap.py .
-          # This WALT file references the old cluster capacity fields. The
-          # current struct exposes max_possible_capacity with the same role.
-          python3 - <<'PY'
-          import pathlib, re
-          p = pathlib.Path("kernel/sched/walt.c")
-          t = p.read_text()
-          pattern = r"static int\s+group_will_fit\(.*?
-\}"
-          m = re.search(pattern, t, re.S)
-          if not m:
-              raise SystemExit("group_will_fit function not found")
-          f = m.group(0)
-          if f.count("cluster->capacity") != 2 or len(re.findall(r"\bmax_capacity\b", f)) != 1:
-              raise SystemExit("unexpected group_will_fit source; refusing broad edit")
-          f = f.replace("cluster->capacity", "cluster->max_possible_capacity")
-          f = re.sub(r"\bmax_capacity\b", "max_possible_capacity", f)
-          p.write_text(t[:m.start()] + f + t[m.end():])
-          print("WALT group_will_fit uses current cluster capacity fields")
-          PY
-          # WALT expects a load-output pointer; this non-reporting caller has none.
-          python3 - <<'PY'
-          import pathlib, re
-          p = pathlib.Path("kernel/sched/fair.c")
-          t = p.read_text()
-          t, n = re.subn(r"(?m)(unsigned long util = cpu_util_freq\(cpu\);)", r"\1", t, count=0)
-          old = "unsigned long util = cpu_util_freq(cpu);"
-          if t.count(old) != 1:
-              raise SystemExit(f"expected one single-argument WALT call; found {t.count(old)}")
-          p.write_text(t.replace(old, "unsigned long util = cpu_util_freq(cpu, NULL);", 1))
-          print("boosted_cpu_util uses the WALT two-argument helper")
-          PY
-          # The audio and camera techpacks are a second kernel generation's code
-          # inside this one and do not compile; they are taken out of the tree,
-          # which is what the techpack build file reads to know what to build.
+          # Keep the techpack Kconfig tree present through olddefconfig. The
+          # audio and camera implementations come from a newer kernel generation
+          # and are removed after configuration, before compilation.
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
@@ -161,9 +122,15 @@ jobs:
           for sym in MSM_SERVICE_LOCATOR MSM_SERVICE_NOTIFIER ICNSS_QMI QCOM_GLINK QCOM_GLINK_PKT QCOM_QMI_HELPERS ICNSS RPMSG_QCOM_SMD QCOM_SMD_RPM QRTR QRTR_SMD REMOTEPROC QCOM_RMTFS_MEM QCOM_RPROC_COMMON DEBUG_FS DYNAMIC_DEBUG REGULATOR REGULATOR_FIXED_VOLTAGE QCOM_TEE TEE MFD_SPMI_PMIC PHY_QCOM_UFS SCSI_UFSHCD SCSI_UFSHCD_PLATFORM SCSI_UFS_QCOM SCSI_UFS_CRYPTO INPUT SND_JACK SND_JACK_INPUT_DEV MEDIA_SUPPORT MEDIA_CONTROLLER VIDEO_DEV VIDEO_V4L2 V4L2_MEM2MEM_DEV SND_SOC SND_SOC_COMPRESS; do
             scripts/config --file out/.config -e "$sym" || true
           done
+          # Kconfig is for the common sdm845 defconfig; sched trace events call
+          # cpu_capacity(), which is absent in this older WALT scheduler tree.
+          scripts/config --file out/.config -d SCHED_DEBUG
+          scripts/config --file out/.config -d SCHEDSTATS
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
-          # Retain techpack Kconfig files: configuration disables unsupported components.
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|MSM_QMI_INTERFACE|ICNSS|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -8
+          # The techpack implementations are from a newer kernel generation and
+          # do not compile against this tree's interfaces.
+          rm -rf techpack/audio techpack/camera-sdm845
 
       - name: Build
         working-directory: ksrc
