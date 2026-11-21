@@ -84,6 +84,9 @@ jobs:
           # icnss sends the WLFW host-capability message before it waits for
           # the firmware's ready indication; this tree's driver never did.
           python3 ../scripts/patch-icnss-hostcap.py .
+          # This branch keeps the WLFW block in icnss.c (no icnss_qmi.c), so the
+          # board data and calibration report are added there.
+          python3 ../scripts/patch-icnss-bdf.py .
           # The audio techpack is a second kernel generation's code inside this one
           # and does not compile here; nothing about the recovery's WLAN bring-up
           # uses it. Keep the directory (Kbuild still descends into it) but empty
