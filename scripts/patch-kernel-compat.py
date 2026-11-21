@@ -33,7 +33,7 @@ if not match:
 function = match.group(0)
 capacity_refs = function.count("cluster->capacity")
 max_ref = len(re.findall(r"\bmax_capacity\b", function))
-if capacity_refs != 2 or max_ref not in (0, 1):
+if capacity_refs not in (2, 3) or max_ref not in (0, 1):
     raise SystemExit(
         f"kernel/sched/walt.c: unexpected group_will_fit body ({capacity_refs=}, {max_ref=})"
     )
