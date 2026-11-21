@@ -128,9 +128,6 @@ jobs:
           scripts/config --file out/.config -d SCHEDSTATS
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|MSM_QMI_INTERFACE|ICNSS|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -8
-          # The techpack implementations are from a newer kernel generation and
-          # do not compile against this tree's interfaces.
-          rm -rf techpack/audio techpack/camera-sdm845
 
       - name: Build
         working-directory: ksrc
