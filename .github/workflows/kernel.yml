@@ -91,7 +91,16 @@ jobs:
           rm -rf techpack/camera-sdm845
           : > techpack/audio/Makefile
           : > techpack/audio/Kconfig
-          printf '%s\n' '# no techpack objects are built for this recovery kernel' > techpack/Makefile
+          # techpack/Kbuild is what Kbuild actually reads, and it still lists the
+          # audio directory in obj-y; link only the stub directory.
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("techpack/Kbuild")
+          t = p.read_text()
+          if "obj-y += stub/ audio/" in t:
+              p.write_text(t.replace("obj-y += stub/ audio/", "obj-y += stub/"))
+          print("techpack obj-y:", [l for l in p.read_text().splitlines() if l.startswith("obj-y")])
+          PY
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
