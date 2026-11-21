@@ -99,4 +99,33 @@ tune_text = tune_text.replace(
 )
 write(tune, tune_text)
 
-print("Applied scheduler tracepoint, WALT, boost and schedtune compatibility fixes")
+# 6. The WALT branch of sugov_get_util() calls arch_scale_cpu_capacity() with one
+#    argument and stune_util(), neither of which exists in this tree (they came
+#    from a newer generation). The generic implementation right below it is the
+#    one this tree supports, so drop the WALT variant and keep that one.
+schedutil = "kernel/sched/cpufreq_schedutil.c"
+schedutil_text = read(schedutil)
+walt_variant = re.search(
+    r"#ifdef CONFIG_SCHED_WALT\n"
+    r"static unsigned long sugov_get_util\(.*?"
+    r"#else\n"
+    r"(static unsigned long sugov_get_util\(.*?\n\})\n"
+    r"#endif\n",
+    schedutil_text,
+    re.S,
+)
+if not walt_variant:
+    raise SystemExit(
+        f"{schedutil}: expected the WALT sugov_get_util variant, its #else and #endif"
+    )
+if "stune_util(" not in walt_variant.group(0):
+    raise SystemExit(f"{schedutil}: the matched block is not the WALT variant")
+write(
+    schedutil,
+    schedutil_text[: walt_variant.start()]
+    + walt_variant.group(1)
+    + "\n"
+    + schedutil_text[walt_variant.end():],
+)
+
+print("Applied tracepoint, WALT, boost, schedtune and schedutil compatibility fixes")
