@@ -139,3 +139,28 @@ replace_once(
 )
 
 print("Applied scheduler and DRM compatibility fixes")
+
+# 8. __cpu_overutilized() is defined in walt.c, which this build does not compile
+#    (see the workflow: WALT is off because the branch lacks two of its symbols).
+#    The EAS callers that remain then have no definition; with WALT off the
+#    utilization signal they would compare does not exist either, so every CPU is
+#    reported as fitting. This affects only placement heuristics.
+core = root / "kernel/sched/core.c"
+core_text = core.read_text()
+stub = (
+    "\n#ifndef CONFIG_SCHED_WALT\n"
+    "/* WALT is not built here, and it owns __cpu_overutilized(); with no WALT\n"
+    "   utilization signal there is nothing to compare, so no CPU is over it. */\n"
+    "bool __cpu_overutilized(int cpu, int delta)\n"
+    "{\n"
+    "\t(void)cpu;\n"
+    "\t(void)delta;\n"
+    "\treturn false;\n"
+    "}\n"
+    "#endif\n"
+)
+if "no CPU is over it" in core_text:
+    raise SystemExit("kernel/sched/core.c: stub already present")
+core.write_text(core_text + stub)
+
+print("Applied scheduler and DRM compatibility fixes")
