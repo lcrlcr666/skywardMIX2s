@@ -92,6 +92,18 @@ jobs:
           # icnss sends the WLFW host-capability message before it waits for
           # the firmware's ready indication; this tree's driver never did.
           python3 ../scripts/patch-icnss-hostcap.py .
+          # WALT expects a load-output pointer; this non-reporting caller has none.
+          python3 - <<'PY'
+          import pathlib, re
+          p = pathlib.Path("kernel/sched/fair.c")
+          t = p.read_text()
+          t, n = re.subn(r"(?m)(unsigned long util = cpu_util_freq\(cpu\);)", r"\1", t, count=0)
+          old = "unsigned long util = cpu_util_freq(cpu);"
+          if t.count(old) != 1:
+              raise SystemExit(f"expected one single-argument WALT call; found {t.count(old)}")
+          p.write_text(t.replace(old, "unsigned long util = cpu_util_freq(cpu, NULL);", 1))
+          print("boosted_cpu_util uses the WALT two-argument helper")
+          PY
           # The audio and camera techpacks are a second kernel generation's code
           # inside this one and do not compile; they are taken out of the tree,
           # which is what the techpack build file reads to know what to build.
