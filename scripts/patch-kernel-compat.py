@@ -39,6 +39,24 @@ function = function.replace("cluster->capacity", "cluster->max_possible_capacity
 function = re.sub(r"\bmax_capacity\b", "max_possible_capacity", function)
 walt.write_text(text[:match.start()] + function + text[match.end():])
 
+# The upstream schedtune entries are missing their array declaration between the
+# wrapper functions and first WALT cftype. Restore the intended local declaration.
+tune = root / "kernel/sched/tune.c"
+tune_text = tune.read_text()
+array_anchor = "#endif\
+\
+#ifdef CONFIG_SCHED_WALT\
+\\t{\
+\\t\\t.name = \\\"sched_boost_no_override\\\","
+if tune_text.count(array_anchor) != 1:
+    raise SystemExit(f"kernel/sched/tune.c: expected one cftype insertion point, found {tune_text.count(array_anchor)}")
+tune_text = tune_text.replace(array_anchor, "#endif\
+\
+static struct cftype files[] = {\
+#ifdef CONFIG_SCHED_WALT\
+\\t{\
+\\t\\t.name = \\\"sched_boost_no_override\\\",", 1)
+tune.write_text(tune_text)
 # boosted_cpu_util does not need the optional WALT diagnostic output structure.
 replace_once(
     "kernel/sched/fair.c",
