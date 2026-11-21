@@ -84,9 +84,12 @@ jobs:
           # icnss sends the WLFW host-capability message before it waits for
           # the firmware's ready indication; this tree's driver never did.
           python3 ../scripts/patch-icnss-hostcap.py .
-          # Keep the techpack Kconfig tree present through olddefconfig. The
-          # audio and camera implementations come from a newer kernel generation
-          # and are removed after configuration, before compilation.
+          # The audio and camera techpacks are a second kernel generation's code
+          # inside this one and do not compile here; nothing about the recovery's
+          # WLAN bring-up uses them. Take the tree out and empty techpack/Kconfig
+          # so Kconfig parsing does not follow the deleted directory.
+          rm -rf techpack/audio techpack/camera-sdm845
+          : > techpack/Kconfig
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
@@ -126,11 +129,14 @@ jobs:
           # cpu_capacity(), which is absent in this older WALT scheduler tree.
           scripts/config --file out/.config -d SCHED_DEBUG
           scripts/config --file out/.config -d SCHEDSTATS
-          # The SDM845 base config pulls a WCD SPI control driver from a different
-          # audio generation; its resolver symbols are absent in this tree and
-          # unrelated to the recovery's WLAN kernel. Exclude that one object.
-          scripts/config --file out/.config -d WCD_SPI_AC
-          scripts/config --file out/.config -d SOUNDWIRE_WCD_CTRL
+          # This branch left two scheduler symbols without a definition
+          # (walt_update_min_max_capacity, schedtune_cpu_margin_with), so the WALT
+          # and schedtune features cannot link as configured. Neither is needed to
+          # bring the WLAN firmware up, so leave those features (and the two
+          # audio objects that reference absent WCD code) out of this kernel.
+          for sym in SCHED_WALT SCHED_TUNE SCHED_TUNE_DUMMY SCHED_CORE_CTL WCD_SPI_AC SOUNDWIRE_WCD_CTRL; do
+            scripts/config --file out/.config -d "$sym" || true
+          done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|MSM_QMI_INTERFACE|ICNSS|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -8
 
