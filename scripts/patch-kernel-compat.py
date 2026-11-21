@@ -128,4 +128,14 @@ write(
     + schedutil_text[walt_variant.end():],
 )
 
-print("Applied tracepoint, WALT, boost, schedtune and schedutil compatibility fixes")
+# 7. This tree's dynamic-debug expansion fails at this one DRM-DP ratelimited
+#    debug call (confirmed by the CI compiler). It is diagnostic only; dropping
+#    it does not affect the voltage-control decision or error return.
+replace_once(
+    "drivers/gpu/drm/msm/dp/dp_ctrl.c",
+    r'(?m)^\s*pr_debug_ratelimited\("max v_level reached\\n"\);\s*$',
+    "\t\t\t/* Omitted: incompatible dynamic-debug call in this kernel tree. */",
+    "expected one DRM-DP max voltage-level debug call",
+)
+
+print("Applied scheduler and DRM compatibility fixes")
