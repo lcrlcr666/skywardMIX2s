@@ -130,6 +130,7 @@ jobs:
           # audio generation; its resolver symbols are absent in this tree and
           # unrelated to the recovery's WLAN kernel. Exclude that one object.
           scripts/config --file out/.config -d WCD_SPI_AC
+          scripts/config --file out/.config -d SOUNDWIRE_WCD_CTRL
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|MSM_QMI_INTERFACE|ICNSS|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -8
 
