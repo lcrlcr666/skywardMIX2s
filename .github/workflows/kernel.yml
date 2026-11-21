@@ -85,7 +85,6 @@ jobs:
           # The audio and camera techpacks are a second kernel generation's code
           # inside this one and do not compile; they are taken out of the tree,
           # which is what the techpack build file reads to know what to build.
-          rm -rf techpack/audio techpack/camera-sdm845
           # The field is added here as well, and said out loud, so a tree that
           # did not take the patch is visible in the log rather than two builds
           # later.
@@ -122,6 +121,8 @@ jobs:
             scripts/config --file out/.config -e "$sym" || true
           done
           make -j"$(nproc)" ARCH=$ARCH CC=clang LLVM=1 LLVM_IAS=1 O=out olddefconfig
+          # Drop incompatible techpack sources after Kconfig parsing is complete.
+          rm -rf techpack/audio techpack/camera-sdm845
           grep -E '^CONFIG_(QCA_CLD_WLAN|MODULES|MSM_QMI_INTERFACE|ICNSS|LITTLE_CPU_MASK|BIG_CPU_MASK)' out/.config | head -8
 
       - name: Build
